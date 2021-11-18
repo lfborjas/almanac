@@ -1,4 +1,10 @@
-module Almanac (someFunc) where
+module Almanac (
+  -- * Event Types
+  Event(..),
+  -- * Event queries
+  worldAlmanac,
+  natalAlmanac
+) where
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+import Almanac.Event.Types
+import Almanac.Ephemeris
