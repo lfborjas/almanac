@@ -1,53 +1,58 @@
-
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TupleSections #-}
-module Almanac.Ephemeris (
-  EventExactDates,
-  worldAlmanac,
-  natalAlmanac,
-  eventExactAt,
-  eventStartsAt,
-  eventEndsAt,
-  eventsWithExactitude,
-  filterEvents,
-  indexByDay,
-  indexedByDay
-) where
 
-import Almanac.Event.Types
-import Almanac.Event.Transit
-    ( getTransits,
-      getNatalTransits,
-      getCuspTransits,
-      uniquePairs,
-      defaultPlanets,
-      allPairs,
-      filteredPairs,
-      selectLunarTransits,
-      selectLunarCuspTransits, slowPlanets )
+module Almanac.Ephemeris
+  ( EventExactDates,
+    worldAlmanac,
+    natalAlmanac,
+    eventExactAt,
+    eventStartsAt,
+    eventEndsAt,
+    eventsWithExactitude,
+    filterEvents,
+    indexByDay,
+    indexedByDay,
+  )
+where
+
 import Almanac.Event.Crossing
-    ( getZodiacCrossings, getHouseCrossings, westernZodiacSigns )
-import Almanac.Event.PlanetStation ( getRetrogrades )
-import Almanac.Event.LunarPhase ( mapLunarPhases )
-import Almanac.Event.Eclipse ( allEclipses, getEclipseDate )
-
-import qualified Control.Foldl as L
-import qualified Streaming.Prelude as S
-import Streaming ( Of((:>)), lift, MonadIO(liftIO) )
-import SwissEphemeris
+  ( getHouseCrossings,
+    getZodiacCrossings,
+    westernZodiacSigns,
+  )
+import Almanac.Event.Eclipse (allEclipses, getEclipseDate)
+import Almanac.Event.LunarPhase (mapLunarPhases)
+import Almanac.Event.PlanetStation (getRetrogrades)
+import Almanac.Event.Transit
+  ( allPairs,
+    defaultPlanets,
+    filteredPairs,
+    getCuspTransits,
+    getNatalTransits,
+    getTransits,
+    selectLunarCuspTransits,
+    selectLunarTransits,
+    slowPlanets,
+    uniquePairs,
+  )
+import Almanac.Event.Types
 import Control.Category ((>>>))
-import qualified Data.Sequence as Sq
-import qualified Data.Foldable as F
-import qualified Data.Map as M
-import Data.Functor ((<&>))
-import Data.Foldable (foldMap', toList)
+import qualified Control.Foldl as L
 import Data.Bifunctor (first)
-import Data.List.NonEmpty (NonEmpty ((:|)), fromList)
-import Data.Time
-import SwissEphemeris.Precalculated
-import Data.Function
 import Data.Either (partitionEithers)
+import Data.Foldable (foldMap', toList)
+import qualified Data.Foldable as F
+import Data.Function
+import Data.Functor ((<&>))
 import Data.List (intersperse, nub)
+import Data.List.NonEmpty (NonEmpty ((:|)), fromList)
+import qualified Data.Map as M
+import qualified Data.Sequence as Sq
+import Data.Time
+import Streaming (MonadIO (liftIO), Of ((:>)), lift)
+import qualified Streaming.Prelude as S
+import SwissEphemeris
+import SwissEphemeris.Precalculated
 
 -------------------------------------------------------------------------------
 -- FUNCTIONS THAT AGGREGATE EVENTS
