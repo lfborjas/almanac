@@ -1,9 +1,13 @@
 module Almanac (
   -- * Event Types
   Event(..),
+  PlanetStation(..),
+  LunarPhaseInfo(..),
+  EclipseInfo(..),
+  Transit(..),
+  Crossing(..),
   -- * Event queries
-  worldAlmanac,
-  natalAlmanac
+  module Almanac.Ephemeris
 ) where
 
 import Almanac.Event.Types

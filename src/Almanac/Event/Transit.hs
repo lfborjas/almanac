@@ -125,6 +125,18 @@ defaultPlanets =
       , Pluto
       ]
 
+slowPlanets :: [Planet]
+slowPlanets =
+  [ Jupiter
+  , MeanApog
+  , Saturn
+  , MeanNode
+  , Chiron
+  , Uranus
+  , Neptune
+  , Pluto
+  ]
+
 -- All pairs, including a planet with itself and slow planets transiting fast ones (vs the usual,
 -- fast ones over slow ones) -- useful for natal transits
 allPairs :: [(Planet, Planet)]
