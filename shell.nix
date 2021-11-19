@@ -9,5 +9,6 @@ in
         packages = p: builtins.attrValues lib;
         buildInputs = [
             nixpkgs.haskellPackages.cabal-install
+            nixpkgs.haskellPackages.haskell-language-server
         ];
     }
