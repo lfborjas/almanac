@@ -18,13 +18,14 @@ library
     other-modules:
       Almanac.Import
       Almanac.EclipticLongitude
-      Almanac.Ephemeris
       Almanac.Event.Crossing
       Almanac.Event.Eclipse
       Almanac.Event.LunarPhase
       Almanac.Event.PlanetStation
       Almanac.Event.Transit
       Almanac.Event.Types
+      Almanac.Event
+      Almanac.Query
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

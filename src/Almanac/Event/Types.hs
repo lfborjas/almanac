@@ -16,6 +16,7 @@ import Almanac.EclipticLongitude ( EclipticLongitude )
 import qualified Data.Sequence as S
 import Data.Sequence (ViewR(EmptyR, (:>)), ViewL (EmptyL, (:<)), (<|), (|>), (><))
 import qualified Data.Map as M
+import Data.Time (UTCTime)
 
 -------------------------------------------------------------------------------
 -- SPECIALIZED CONTAINTERS
@@ -106,6 +107,11 @@ data Event
   | Eclipse          EclipseInfo
 
 type EventSeq = MergeSeq Event
+
+-- | Events that travel with their moments of exactitude
+-- (stored as a separate datum since they usually require
+-- further trips through IO beyond just traversing an ephemeris.)
+data ExactEvent = ExactEvent Event [UTCTime]
 
 -- | Alias for readability
 getEvents :: EventSeq -> S.Seq Event

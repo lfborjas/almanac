@@ -182,7 +182,7 @@ mkTransit ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
         rel = relation before' after' ref
         phase = transitPhase station rel
         phaseInfo = singleton $ TransitPhase phase t1 t2
-    pure 
+    pure
       Transit {
         aspect = aspectName,
         transiting = ephePlanet p11,
@@ -195,7 +195,7 @@ mkTransit ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
         transitIsExact = mempty,
         transitCrosses = meets
       }
-     
+
 
 
 -------------------------------------------------------------------------------
@@ -288,17 +288,20 @@ normalize points@(p1, p2, ref)
   where
     translate = (+90)
 
-selectLunarTransits :: JulianDayTT -> JulianDayTT -> Ephemeris Double -> IO (Grouped (Planet, Planet) Event)
-selectLunarTransits start end natalEphemeris =
+selectLunarTransits :: JulianDayTT -> JulianDayTT -> Ephemeris Double -> [Planet] -> IO (Grouped (Planet, Planet) Event)
+selectLunarTransits start end natalEphemeris chosenPlanets =
   foldMap' mkLunarTransit (ephePositions natalEphemeris)
   where
     mkLunarTransit :: EphemerisPosition Double -> IO (Grouped (Planet, Planet) Event)
     mkLunarTransit pos = do
-      transit <- lunarAspects ephePlanet start end pos --(EclipticLongitude . epheLongitude $ pos)
-      if null transit then
-        mempty
+      if ephePlanet pos `elem` chosenPlanets then do
+        transit <- lunarAspects ephePlanet start end pos --(EclipticLongitude . epheLongitude $ pos)
+        if null transit then
+          mempty
+        else
+          pure $ Aggregate $ M.fromList [((Moon, ephePlanet pos), MergeSeq . fromList . map PlanetaryTransit $ transit)]
       else
-        pure $ Aggregate $ M.fromList [((Moon, ephePlanet pos), MergeSeq . fromList . map PlanetaryTransit $ transit)]
+        mempty
 
 selectLunarCuspTransits :: JulianDayTT -> JulianDayTT -> [House]-> IO (Grouped (Planet, House) Event)
 selectLunarCuspTransits start end =
@@ -306,7 +309,7 @@ selectLunarCuspTransits start end =
   where
     mkLunarTransit :: House -> IO (Grouped (Planet, House) Event)
     mkLunarTransit pos = do
-      transit <- lunarAspects id start end pos 
+      transit <- lunarAspects id start end pos
       if null transit then
         mempty
       else

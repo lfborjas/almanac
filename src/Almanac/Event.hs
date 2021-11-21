@@ -1,47 +1,34 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TupleSections #-}
 
-module Almanac.Ephemeris
-  ( EventExactDates,
-    worldAlmanac,
-    natalAlmanac,
-    eventExactAt,
-    eventStartsAt,
-    eventEndsAt,
-    eventsWithExactitude,
-    filterEvents,
-    indexByDay,
-    indexedByDay,
-  )
-where
+module Almanac.Event (
+  -- * Event indexing
+  indexByDay,
+  indexedByDay,
+  -- * Event transformation
+  eventsWithExactitude,
+  -- * Default event filtering
+  filterEvents,
+  -- * Event properties
+  isRelevantEvent,
+  isCloseOrb,
+  isSlowTransit,
+  hasExactitude,
+  -- * Temporal properties
+  eventExactAt,
+  eventStartsAt,
+  eventEndsAt
+) where
 
-import Almanac.Event.Crossing
-  ( getHouseCrossings,
-    getZodiacCrossings,
-    westernZodiacSigns,
-  )
-import Almanac.Event.Eclipse (allEclipses, getEclipseDate)
-import Almanac.Event.LunarPhase (mapLunarPhases)
-import Almanac.Event.PlanetStation (getRetrogrades)
+import Almanac.Event.Eclipse (getEclipseDate)
 import Almanac.Event.Transit
-  ( allPairs,
-    defaultPlanets,
-    filteredPairs,
-    getCuspTransits,
-    getNatalTransits,
-    getTransits,
-    selectLunarCuspTransits,
-    selectLunarTransits,
-    slowPlanets,
-    uniquePairs,
+  ( slowPlanets,
   )
 import Almanac.Event.Types
 import Control.Category ((>>>))
-import qualified Control.Foldl as L
 import Data.Bifunctor (first)
 import Data.Either (partitionEithers)
 import Data.Foldable (foldMap', toList)
-import qualified Data.Foldable as F
 import Data.Function
 import Data.Functor ((<&>))
 import Data.List (intersperse, nub)
@@ -49,112 +36,34 @@ import Data.List.NonEmpty (NonEmpty ((:|)), fromList)
 import qualified Data.Map as M
 import qualified Data.Sequence as Sq
 import Data.Time
-import Streaming (MonadIO (liftIO), Of ((:>)), lift)
-import qualified Streaming.Prelude as S
 import SwissEphemeris
-import SwissEphemeris.Precalculated
-
--------------------------------------------------------------------------------
--- FUNCTIONS THAT AGGREGATE EVENTS
--------------------------------------------------------------------------------
-
-worldAlmanac :: UTCTime -> UTCTime -> IO (Sq.Seq Event)
-worldAlmanac start end = do
-  Just ttStart <- toJulianDay start
-  Just ttEnd   <- toJulianDay end
-  -- TODO: expose the function that can produce both at the same time
-  Just utStart <- toJulianDay start
-  Just utEnd   <- toJulianDay end
-  let ephe = streamEpheJDF ttStart ttEnd
-  (retro, cross, slowTransits, lun) :> _ <-
-    ephe
-    & ephemerisWindows 2
-    & L.purely S.fold mkAlmanac
-
-  ecl <- allEclipses utStart utEnd
-  let eclSq = Sq.fromList $ map Eclipse ecl
-
-  pure $ retro <> cross <> slowTransits <> lun <> eclSq
-  where
-    mkAlmanac =
-      (,,,) <$> L.foldMap getRetrogrades collapse
-            <*> L.foldMap (getZodiacCrossings (tail defaultPlanets) westernZodiacSigns) collapse
-            <*> L.foldMap (getTransits slowPairs) collapse
-            <*> L.foldMap mapLunarPhases getMerged
-
-slowPairs :: [(Planet, Planet)]
-slowPairs =
-  filteredPairs
-    uniquePairs
-    slowPlanets
-    defaultPlanets
-
-
-collapse :: Aggregate grouping (MergeSeq Event) -> Sq.Seq Event
-collapse = getAggregate >>> F.fold >>> getMerged
-
-natalAlmanac :: GeographicPosition -> UTCTime -> UTCTime -> UTCTime -> IO (Sq.Seq Event)
-natalAlmanac geo birth start end = do
-  Just startTT <- toJulianDay start
-  Just endTT   <- toJulianDay end
-  Just birthTT  <- toJulianDay birth
-  Just birthUT1 <- toJulianDay birth
-
-  let ephe = streamEpheJDF startTT endTT
-  natalEphe' <- readEphemerisEasy True birthTT
-  case natalEphe' of
-    Left e -> fail e
-    Right natalEphe -> do
-      CuspsCalculation{houseCusps} <- calculateCusps Placidus birthUT1 geo
-      let houses = zipWith House [I .. XII] houseCusps
-      (cross, trns, cuspTrns) :> _ <-
-        ephe
-        & ephemerisWindows 2
-        & L.purely S.fold (mkAlmanac natalEphe houses)
-
-      lun <- selectLunarTransits startTT endTT natalEphe
-      lunCusps <- selectLunarCuspTransits startTT endTT (filterHouses houses)
-
-      pure $ cross <> trns <> cuspTrns <> collapse lun <> collapse lunCusps
-  where
-    -- all planets are considered, except a transiting Moon
-    defaultNatalPairings = filteredPairs allPairs (tail defaultPlanets) defaultPlanets
-    mkAlmanac n houses =
-      (,,) <$> L.foldMap (getHouseCrossings defaultPlanets houses) collapse
-           <*> L.foldMap (getNatalTransits n defaultNatalPairings) collapse
-           <*> L.foldMap (getCuspTransits  (filterHouses houses) sansMoon) collapse
-    filterHouses houses =
-      houses & filter (houseName >>> (`elem` [I, X]))
-    sansMoon = filter (Moon /=) defaultPlanets
 
 -------------------------------------------------------------------------------
 -- INDEXING UTILITIES 
 -------------------------------------------------------------------------------
 
-type EventExactDates = (Event, [UTCTime])
-
 -- | Given a sequence of events, compute their moments of exactitude
-eventsWithExactitude :: Sq.Seq Event -> IO (Sq.Seq EventExactDates)
+eventsWithExactitude :: Sq.Seq Event -> IO (Sq.Seq ExactEvent)
 eventsWithExactitude =
   mapM addExactitude
   where
     addExactitude evt = do
       exacts <- eventExactAt evt
-      pure (evt, exacts)
+      pure $ ExactEvent evt exacts
 
 -- | Somewhat opinionated event filter:
 -- If the event is a transit, only keep it if the transiting body is a slow planet,
 -- or the final orb in the interval is very close, or the event has exactitude
 -- moments happening.
-filterEvents :: Sq.Seq EventExactDates -> Sq.Seq EventExactDates
+filterEvents :: Sq.Seq ExactEvent -> Sq.Seq ExactEvent
 filterEvents = Sq.filter isRelevantEvent
 
 -- | Arbitrary test to see if an event is relevant enough to show in
 -- a UI, or process further.
-isRelevantEvent :: EventExactDates -> Bool
-isRelevantEvent evt@(PlanetaryTransit t, _e) =
+isRelevantEvent :: ExactEvent -> Bool
+isRelevantEvent evt@(ExactEvent (PlanetaryTransit t) _e) =
   isSlowTransit t || isCloseOrb t || hasExactitude evt
-isRelevantEvent evt@(HouseTransit t, _e) =
+isRelevantEvent evt@(ExactEvent (HouseTransit t) _e) =
   isSlowTransit t || isCloseOrb t || hasExactitude evt
 isRelevantEvent e = hasExactitude e
 
@@ -168,20 +77,20 @@ isSlowTransit :: Transit a -> Bool
 isSlowTransit Transit{transiting} =
   transiting `elem` slowPlanets
 
-hasExactitude :: EventExactDates -> Bool
-hasExactitude = not . null . snd
+hasExactitude :: ExactEvent -> Bool
+hasExactitude (ExactEvent _ xs) = not . null $ xs
 
-indexByDay :: TimeZone -> Sq.Seq EventExactDates -> M.Map Day (Sq.Seq EventExactDates)
+indexByDay :: TimeZone -> Sq.Seq ExactEvent -> M.Map Day (Sq.Seq ExactEvent)
 indexByDay tz events =
   foldMap' repeatPerEvent events
     & map (first getDay)
     & M.fromListWith (<>)
   where
-    repeatPerEvent e@(_evt, exacts) =
+    repeatPerEvent e@(ExactEvent _evt exacts) =
       zip (map (utcToZonedTime tz) exacts) (repeat $ Sq.singleton e)
     getDay (ZonedTime (LocalTime d _tod) _tz) = d
 
-indexedByDay :: TimeZone -> Sq.Seq Event -> IO (M.Map Day (Sq.Seq EventExactDates))
+indexedByDay :: TimeZone -> Sq.Seq Event -> IO (M.Map Day (Sq.Seq ExactEvent))
 indexedByDay tz evts = eventsWithExactitude evts <&> (filterEvents >>> indexByDay tz)
 -------------------------------------------------------------------------------
 -- TEMPORAL UTILITIES
@@ -298,30 +207,3 @@ allCrossingsBetween planet toCross start end = do
         pure . Left . mconcat $ intersperse ", " errors
       else
         pure . Right . fromList . nub $ crossings
-
--------------------------------------------------------------------------------
--- STREAMING UTILITIES
--------------------------------------------------------------------------------
-
-streamEpheJD :: MonadIO m => (String -> m x)
-  -> JulianDayTT
-  -> JulianDayTT
-  -> S.Stream (S.Of (Ephemeris Double)) m ()
-streamEpheJD onError start end =
-  S.each [start .. end]
-  & S.mapM (liftIO . readEphemerisEasy False)
-  & S.partitionEithers
-  -- thanks, ocharles:
-  -- https://www.reddit.com/r/haskell/comments/5x2g0r/streaming_package_vs_pipes_conduit_question_on/def39od?utm_source=share&utm_medium=web2x&context=3
-  & S.mapM_ (lift . onError)
-
-streamEpheJDF :: (MonadIO m, MonadFail m) => JulianDayTT -> JulianDayTT -> S.Stream (S.Of (Ephemeris Double)) m ()
-streamEpheJDF = streamEpheJD fail
-
--- | Given a stream of ephemeris, produce "windowed"
--- steps
-ephemerisWindows :: Monad m =>
-  Int
-  -> S.Stream (S.Of (Ephemeris Double)) m b
-  -> S.Stream (S.Of (Sq.Seq (Ephemeris Double))) m b
-ephemerisWindows = S.slidingWindow
