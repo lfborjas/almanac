@@ -9,9 +9,12 @@ module Almanac (
   -- * Event queries
   module Almanac.Query,
   -- * Event handling and processing
-  module Almanac.Event
+  module Almanac.Event,
+  -- * Nifty utilities, all optional
+  module Almanac.Extras
 ) where
 
 import Almanac.Event.Types
 import Almanac.Query
 import Almanac.Event
+import Almanac.Extras

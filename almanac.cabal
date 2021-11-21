@@ -26,6 +26,7 @@ library
       Almanac.Event.Types
       Almanac.Event
       Almanac.Query
+      Almanac.Extras
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

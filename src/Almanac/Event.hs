@@ -2,18 +2,8 @@
 {-# LANGUAGE TupleSections #-}
 
 module Almanac.Event (
-  -- * Event indexing
-  indexByDay,
-  indexedByDay,
   -- * Event transformation
   eventsWithExactitude,
-  -- * Default event filtering
-  filterEvents,
-  -- * Event properties
-  isRelevantEvent,
-  isCloseOrb,
-  isSlowTransit,
-  hasExactitude,
   -- * Temporal properties
   eventExactAt,
   eventStartsAt,
@@ -21,26 +11,15 @@ module Almanac.Event (
 ) where
 
 import Almanac.Event.Eclipse (getEclipseDate)
-import Almanac.Event.Transit
-  ( slowPlanets,
-  )
 import Almanac.Event.Types
-import Control.Category ((>>>))
-import Data.Bifunctor (first)
 import Data.Either (partitionEithers)
 import Data.Foldable (foldMap', toList)
 import Data.Function
-import Data.Functor ((<&>))
 import Data.List (intersperse, nub)
 import Data.List.NonEmpty (NonEmpty ((:|)), fromList)
-import qualified Data.Map as M
 import qualified Data.Sequence as Sq
 import Data.Time
 import SwissEphemeris
-
--------------------------------------------------------------------------------
--- INDEXING UTILITIES 
--------------------------------------------------------------------------------
 
 -- | Given a sequence of events, compute their moments of exactitude
 eventsWithExactitude :: Sq.Seq Event -> IO (Sq.Seq ExactEvent)
@@ -51,47 +30,6 @@ eventsWithExactitude =
       exacts <- eventExactAt evt
       pure $ ExactEvent evt exacts
 
--- | Somewhat opinionated event filter:
--- If the event is a transit, only keep it if the transiting body is a slow planet,
--- or the final orb in the interval is very close, or the event has exactitude
--- moments happening.
-filterEvents :: Sq.Seq ExactEvent -> Sq.Seq ExactEvent
-filterEvents = Sq.filter isRelevantEvent
-
--- | Arbitrary test to see if an event is relevant enough to show in
--- a UI, or process further.
-isRelevantEvent :: ExactEvent -> Bool
-isRelevantEvent evt@(ExactEvent (PlanetaryTransit t) _e) =
-  isSlowTransit t || isCloseOrb t || hasExactitude evt
-isRelevantEvent evt@(ExactEvent (HouseTransit t) _e) =
-  isSlowTransit t || isCloseOrb t || hasExactitude evt
-isRelevantEvent e = hasExactitude e
-
--- | Determine if the last orb for a planet in a given
--- interval is close to exactitude; works best for 24 hour
--- intervals.
-isCloseOrb :: Transit a -> Bool
-isCloseOrb Transit{transitOrb} = transitOrb < 3
-
-isSlowTransit :: Transit a -> Bool
-isSlowTransit Transit{transiting} =
-  transiting `elem` slowPlanets
-
-hasExactitude :: ExactEvent -> Bool
-hasExactitude (ExactEvent _ xs) = not . null $ xs
-
-indexByDay :: TimeZone -> Sq.Seq ExactEvent -> M.Map Day (Sq.Seq ExactEvent)
-indexByDay tz events =
-  foldMap' repeatPerEvent events
-    & map (first getDay)
-    & M.fromListWith (<>)
-  where
-    repeatPerEvent e@(ExactEvent _evt exacts) =
-      zip (map (utcToZonedTime tz) exacts) (repeat $ Sq.singleton e)
-    getDay (ZonedTime (LocalTime d _tod) _tz) = d
-
-indexedByDay :: TimeZone -> Sq.Seq Event -> IO (M.Map Day (Sq.Seq ExactEvent))
-indexedByDay tz evts = eventsWithExactitude evts <&> (filterEvents >>> indexByDay tz)
 -------------------------------------------------------------------------------
 -- TEMPORAL UTILITIES
 -------------------------------------------------------------------------------
