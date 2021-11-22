@@ -157,9 +157,8 @@ runNatalQuery (NatalArgs i@Interval{start,end} qs mqs ReferenceEvent{eventTime, 
 toFoldMundane :: MundaneQuery -> L.Fold (Seq (Ephemeris Double)) (Seq Event)
 toFoldMundane =
   \case
-    -- TODO(luis) use planets to filter
     (QueryDirectionChange planets) ->
-      L.foldMap getRetrogrades collapse
+      L.foldMap (getRetrogrades (toList planets)) collapse
     (QueryZodiacIngress planets)  ->
       L.foldMap (getZodiacCrossings (toList planets) westernZodiacSigns) collapse
     (QueryPlanetaryMundaneTransit pairs) ->
