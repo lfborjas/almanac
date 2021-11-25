@@ -3,6 +3,8 @@ name:               almanac
 version:            0.1.0.0
 
 synopsis: utilities for ephemeris analysis
+description: See README at <https://github.com/lfborjas/almanac>
+category: Astrology
 
 license-file: LICENSE
 author:             Luis Borjas Reyes
@@ -11,7 +13,7 @@ bug-reports: https://github.com/lfborjas/almanac/issues
 
 extra-source-files: 
     CHANGELOG.md
-    LICENSE.md
+    LICENSE
     README.md
     test/ephe/sep4_244
 
