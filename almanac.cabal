@@ -57,7 +57,7 @@ library
 
     -- other-extensions:
     build-depends:    
-      base ^>=4.14.1.0
+      base >= 4.13 && <= 4.16
       ,containers
       ,swiss-ephemeris ^>= 1.4.0.0
       ,time
