@@ -105,6 +105,7 @@ data Event
   | HouseTransit     (Transit House)
   | LunarPhase       LunarPhaseInfo
   | Eclipse          EclipseInfo
+  deriving (Show)
 
 type EventSeq = MergeSeq Event
 

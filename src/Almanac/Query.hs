@@ -14,7 +14,7 @@ module Almanac.Query (
 ) where
 
 import Data.Time (UTCTime)
-import Data.List ( nub, partition )
+import Data.List ( nub )
 import Data.List.NonEmpty ( NonEmpty, toList)
 import SwissEphemeris
 import Data.Sequence (Seq, fromList)
@@ -32,20 +32,23 @@ import Almanac.Event.LunarPhase
 import Control.Category ((>>>))
 import Streaming (lift, MonadIO (..))
 import qualified Data.Foldable as F
-import qualified Data.List.NonEmpty as NE
+import Data.Either (partitionEithers)
 
 
--- | internal utility typeclass to signal which queries
--- can be composed into a one-pass fold, and which
--- require direct execution. 
-class ComposableQuery a where
-  canCompose :: a -> Bool
+-- | Internal utility typeclass to signal how a query is to be processed:
+-- * A 'Composable' query can be turned into a @Fold@ which can then
+--   be combined with others through a @Fold's@ 'Applicative' instance.
+-- * A 'NonComposable' query must be executed directly, on its own. 
+class QueryStrategy a where
+  classifyQuery :: a -> Either (NonComposable a) (Composable a)
 
-data ReferenceEvent =
-  ReferenceEvent {
-    eventTime :: !UTCTime,
-    eventLocation :: !GeographicPosition
-  } deriving (Eq, Show)
+-- | A query is 'Composable' if it can be turned into a Fold
+-- for one-pass processing along other queries
+newtype Composable q = Composable q
+-- | A query is 'Direct' if it cannot be turned into a Fold
+-- and must be executed on its own
+newtype NonComposable q = NonComposable q
+
 
 data MundaneQuery
   = QueryDirectionChange (NonEmpty Planet)
@@ -55,11 +58,9 @@ data MundaneQuery
   | QueryEclipse
   deriving (Eq, Show)
 
-instance ComposableQuery MundaneQuery where
-  canCompose =
-    \case
-      QueryEclipse -> False
-      _ -> True
+instance QueryStrategy MundaneQuery where
+  classifyQuery QueryEclipse = Left . NonComposable $ QueryEclipse
+  classifyQuery q = Right . Composable $ q
 
 data NatalQuery
   = QueryHouseIngress    (NonEmpty Planet)
@@ -69,12 +70,10 @@ data NatalQuery
   | QueryLunarCuspTransit  (NonEmpty HouseName)
   deriving (Eq, Show)
 
-instance ComposableQuery NatalQuery where
-  canCompose =
-    \case
-      QueryLunarCuspTransit _-> False
-      QueryLunarNatalTransit _ -> False
-      _ -> True
+instance QueryStrategy NatalQuery where
+  classifyQuery q@(QueryLunarNatalTransit _) = Left . NonComposable $ q
+  classifyQuery q@(QueryCuspTransit _) = Left . NonComposable $ q
+  classifyQuery q = Right . Composable $ q
 
 data Interval =
   Interval {
@@ -82,6 +81,11 @@ data Interval =
     end :: !UTCTime
   } deriving (Eq, Show)
 
+data ReferenceEvent =
+  ReferenceEvent {
+    eventTime :: !UTCTime,
+    eventLocation :: !GeographicPosition
+  } deriving (Eq, Show)
 
 data MundaneArgs =
   MundaneArgs {
@@ -106,11 +110,15 @@ runQuery :: Query -> IO (Seq Event)
 runQuery (Mundane args) = runMundaneQuery args
 runQuery (Natal   args) = runNatalQuery args
 
-runMundaneQuery :: MundaneArgs ->IO (Seq Event)
+-------------------------------------------------------------------------------
+-- QUERY UTILITIES
+-------------------------------------------------------------------------------
+
+runMundaneQuery :: MundaneArgs -> IO (Seq Event)
 runMundaneQuery (MundaneArgs i@Interval{start,end} qs) = do
   Just ttStart <- toJulianDay start
   Just ttEnd   <- toJulianDay end
-  let (pureQueries, impureQueries) = NE.partition canCompose qs
+  let (impureQueries, pureQueries) = partitionQueries qs
       ephe = streamEpheJDF ttStart ttEnd
   -- construct a fold of all pure queries to traverse the ephemeris
   -- only once; results in a list of sequences, one entry per query.
@@ -132,8 +140,8 @@ runNatalQuery (NatalArgs i@Interval{start,end} qs mqs ReferenceEvent{eventTime, 
   Just ttEvent <- toJulianDay eventTime
   Just ut1Event <- toJulianDay eventTime
   referenceEphemeris <- readEphemerisEasy True ttEvent
-  let (pureNatalQueries, impureNatalQueries) = NE.partition canCompose qs
-      (pureMundaneQueries, impureMundaneQueries) = partition canCompose mqs
+  let (impureNatalQueries, pureNatalQueries) = partitionQueries qs
+      (impureMundaneQueries, pureMundaneQueries) = partitionQueries mqs
       ephe = streamEpheJDF ttStart ttEnd
   case referenceEphemeris of
     Left e -> fail e
@@ -153,10 +161,14 @@ runNatalQuery (NatalArgs i@Interval{start,end} qs mqs ReferenceEvent{eventTime, 
 
       pure $ mconcat pureFolded <> mconcat impureFolded
 
--------------------------------------------------------------------------------
-toFoldMundane :: MundaneQuery -> L.Fold (Seq (Ephemeris Double)) (Seq Event)
-toFoldMundane =
-  \case
+partitionQueries :: (QueryStrategy q, Foldable m) => m q -> ([NonComposable q], [Composable q]) 
+partitionQueries = 
+    F.toList >>> map classifyQuery >>> partitionEithers
+
+
+toFoldMundane :: Composable MundaneQuery -> L.Fold (Seq (Ephemeris Double)) (Seq Event)
+toFoldMundane (Composable q) =
+  case q of
     (QueryDirectionChange planets) ->
       L.foldMap (getRetrogrades (toList planets)) collapse
     (QueryZodiacIngress planets)  ->
@@ -165,12 +177,12 @@ toFoldMundane =
       L.foldMap (getTransits (toList pairs)) collapse
     QueryLunarPhase ->
       L.foldMap mapLunarPhases getMerged
-    -- All other queries are meant to be executed directly, without constructing a Fold
+    -- All other queries are meant to be executed directly, without constructing a Fold.
     _ -> mempty
 
-execMundane :: Interval -> MundaneQuery -> IO (Seq Event)
-execMundane Interval{start,end} =
-  \case
+execMundane :: Interval -> NonComposable MundaneQuery -> IO (Seq Event)
+execMundane Interval{start,end} (NonComposable q) =
+  case q of
     QueryEclipse -> do
      -- TODO: expose the function that can produce both at the same time
       Just utStart <- toJulianDay start
@@ -180,9 +192,9 @@ execMundane Interval{start,end} =
     -- All other queries are meant to be folded.
     _ -> pure mempty
 
-toFoldNatal :: Ephemeris Double -> [House] -> NatalQuery -> L.Fold (Seq (Ephemeris Double)) (Seq Event)
-toFoldNatal ephe houses =
-  \case
+toFoldNatal :: Ephemeris Double -> [House] -> Composable NatalQuery -> L.Fold (Seq (Ephemeris Double)) (Seq Event)
+toFoldNatal ephe houses (Composable q) =
+  case q of
     (QueryHouseIngress planets) ->
       L.foldMap (getHouseCrossings (toList planets) houses) collapse
     (QueryPlanetaryNatalTransit pairs) ->
@@ -195,9 +207,9 @@ toFoldNatal ephe houses =
       in L.foldMap (getCuspTransits chosenHouses chosenPlanets) collapse
     _ -> mempty
 
-execNatal :: Interval -> Ephemeris Double -> [House] -> NatalQuery -> IO (Seq Event)
-execNatal Interval{start,end} ephe houses =
-  \case
+execNatal :: Interval -> Ephemeris Double -> [House] -> NonComposable NatalQuery -> IO (Seq Event)
+execNatal Interval{start,end} ephe houses (NonComposable q) =
+  case q of
     (QueryLunarNatalTransit planets) -> do
       Just ttStart <- toJulianDay start
       Just ttEnd   <- toJulianDay end
