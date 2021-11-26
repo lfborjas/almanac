@@ -74,8 +74,7 @@ spec = beforeAll_ epheWithFallback $ do
                 (Retrograde,"2021-09-27T05:10:10.775578022003Z"),
                 (Direct,"2021-10-18T15:16:50.452575981616Z")
               ] & map (second mkUTC)
-        events <- runQuery q
-        exactEvents <- eventsWithExactitude events
+        exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = extractStationInfo exactEvents
         toList digest `shouldBe` expectedStations
 
@@ -97,6 +96,13 @@ spec = beforeAll_ epheWithFallback $ do
                 (Mars,Scorpio,"2021-10-30T14:21:06.681294143199Z"),
                 (Mars,Sagittarius,"2021-12-13T09:52:56.338474452495Z"),
                 (Jupiter,Pisces,"2021-05-13T22:36:03.055363297462Z")
+                -- TODO(luis)
+                -- There's a retrograde ingress from Jupiter back
+                -- into Aquarius on Jul 28 @ 8am ET, and then back
+                -- to Pisces on Dec 28 @ 11pm ET. The logic
+                -- is currently flawed and only ingresses at the "beginning"
+                -- of a zodiac are considered, should refactor to consider
+                -- both the beginning and end.
               ] & map (second mkUTC)
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = extractCrossingInfo exactEvents
