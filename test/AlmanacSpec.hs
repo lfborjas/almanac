@@ -56,6 +56,7 @@ extractMoonPhaseInfo evts =
       Just (lunarPhaseName, firstExact)
     summarize _ = Nothing
     
+-- | Ugly function to "pretty print" events
 genericEventInfo :: Seq ExactEvent ->  [(String, UTCTime)]
 genericEventInfo evts =
   fmap summarize evts & toList & catMaybes
@@ -66,6 +67,18 @@ genericEventInfo evts =
           case info of
             SolarEclipse eclType _ -> Just ("Solar Eclipse (" <> show eclType <> ")", firstExact)
             LunarEclipse eclType _ -> Just ("Lunar Eclipse (" <> show eclType <> ")", firstExact)
+        DirectionChange PlanetStation{stationType, stationPlanet} ->
+          if stationType `elem` ([Direct, Retrograde] :: [Station] ) then
+            Just (show stationPlanet <> " goes " <> show stationType, firstExact)
+          else
+            Nothing
+        ZodiacIngress (Crossing _s _e Zodiac{signName} planet motion) ->
+          Just (show planet <> " enters " <> show signName <> " (" <> show motion <> ")", firstExact)
+        LunarPhase LunarPhaseInfo{lunarPhaseName} ->
+          if lunarPhaseName `elem` ([FullMoon, NewMoon] :: [LunarPhaseName]) then
+            Just (show lunarPhaseName, firstExact)
+          else
+            Nothing
         _ -> Just ("not implemented yet", firstExact)
     summarize _ = Nothing
 
@@ -165,3 +178,33 @@ spec = beforeAll_ epheWithFallback $ do
         exactEcl <- runQuery q >>= eventsWithExactitude
         let digest = genericEventInfo exactEcl
         digest `shouldBe` expectedEclipses
+
+    context "Composite mundane query" $ do
+      it "finds all events for October/November 2021" $ do
+        let oct2021 = UTCTime (fromGregorian 2021 10 1) 0
+            dec2021 = UTCTime (fromGregorian 2021 12 1) 0
+            q = Mundane
+                  MundaneArgs{
+                    mInterval = Interval oct2021 dec2021,
+                    mQueries = [
+                      QueryDirectionChange [Mercury],
+                      QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto],
+                      QueryEclipse,
+                      QueryLunarPhase
+                    ]
+                  }
+            expectedEvents = 
+              [
+                ("Mercury goes Direct","2021-10-18T15:16:50.452575981616Z"),
+                ("Mars enters Scorpio (DirectMotion)","2021-10-30T14:21:06.681294143199Z"),
+                ("NewMoon","2021-10-06T11:05:24.023683369159Z"),
+                ("FullMoon","2021-10-20T14:56:41.52483433485Z"),
+                ("NewMoon","2021-11-04T21:14:36.684200763702Z"),
+                ("FullMoon","2021-11-19T08:57:27.984892129898Z"),
+                ("Lunar Eclipse (PartialLunarEclipse)","2021-11-19T09:02:55.849740207195Z")
+              ] & map (second mkUTC)
+        exactEvents <- runQuery q >>= eventsWithExactitude 
+        let digest = genericEventInfo exactEvents
+        digest `shouldBe` expectedEvents
+
+ 
