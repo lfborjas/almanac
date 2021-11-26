@@ -7,6 +7,8 @@ module Almanac (
   Transit(..),
   Crossing(..),
   Station(..),
+  Zodiac(..),
+  House(..),
   ExactEvent(..),
   -- * Event queries
   module Almanac.Query,
@@ -14,9 +16,11 @@ module Almanac (
   module Almanac.Event,
   -- * Nifty utilities, all optional
   module Almanac.Extras,
+  westernZodiacSigns
 ) where
 
 import Almanac.Event.Types
 import Almanac.Query
 import Almanac.Event
 import Almanac.Extras
+import Almanac.Event.Crossing (westernZodiacSigns)

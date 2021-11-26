@@ -117,7 +117,7 @@ data ExactEvent =
   ExactEvent {
     evt :: Event,
     exactitudeMoments :: [UTCTime]
-  }
+  } deriving (Eq, Show)
 
 -- | Alias for readability
 getEvents :: EventSeq -> S.Seq Event

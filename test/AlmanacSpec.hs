@@ -10,7 +10,7 @@ import Data.Time
 import Data.Foldable (toList)
 import Data.Sequence
 import Data.Function
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (mapMaybe, fromJust, catMaybes)
 import Data.Bifunctor (second)
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 
@@ -40,17 +40,27 @@ extractStationInfo evts =
       Just (stationType, firstExact)
     summarize _ = Nothing
 
+extractCrossingInfo :: Seq ExactEvent -> [(Planet, ZodiacSignName, UTCTime)]
+extractCrossingInfo evts =
+  fmap summarize evts & toList & catMaybes
+  where
+    summarize (ExactEvent (ZodiacIngress (Crossing _s _e Zodiac{signName} planet _)) (firstExact:_)) =
+      Just (planet, signName, firstExact)
+    summarize _ = Nothing
+
 mkUTC :: String -> UTCTime
 mkUTC = fromJust . iso8601ParseM
+
+start2021, end2021 :: UTCTime
+start2021 = UTCTime (fromGregorian 2021 1 1) 0
+end2021 = UTCTime (fromGregorian 2022 1 1) 0
 
 spec :: Spec
 spec = beforeAll_ epheWithFallback $ do
   describe "runQuery" $ do
     context "QueryDirectionChange" $ do
       it "finds all the changes of direction for Mercury in 2021" $ do
-        let start2021 =  UTCTime (fromGregorian 2021 1 1) 0
-            end2021   =  UTCTime (fromGregorian 2021 12 31) 0
-            q = Mundane
+        let q = Mundane
                   MundaneArgs{
                     mInterval = Interval start2021 end2021,
                     mQueries = [QueryDirectionChange [Mercury]]
@@ -68,3 +78,26 @@ spec = beforeAll_ epheWithFallback $ do
         exactEvents <- eventsWithExactitude events
         let digest = extractStationInfo exactEvents
         toList digest `shouldBe` expectedStations
+
+    context "QueryZodiacIngress" $ do
+      it "finds all ingresses in 2021" $ do
+        let q = Mundane
+                  MundaneArgs{
+                    mInterval = Interval start2021 end2021,
+                    mQueries = [QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto]]
+                  }
+            expectedCrossings =
+              [
+                (Mars,Taurus,"2021-01-06T22:27:01.465341746807Z"),
+                (Mars,Gemini,"2021-03-04T03:29:34.011701345443Z"),
+                (Mars,Cancer,"2021-04-23T11:48:55.144302248954Z"),
+                (Mars,Leo,"2021-06-11T13:33:44.010010063648Z"),
+                (Mars,Virgo,"2021-07-29T20:32:32.573490142822Z"),
+                (Mars,Libra,"2021-09-15T00:13:56.056096851825Z"),
+                (Mars,Scorpio,"2021-10-30T14:21:06.681294143199Z"),
+                (Mars,Sagittarius,"2021-12-13T09:52:56.338474452495Z"),
+                (Jupiter,Pisces,"2021-05-13T22:36:03.055363297462Z")
+              ] & map (second mkUTC)
+        exactEvents <- runQuery q >>= eventsWithExactitude
+        let digest = extractCrossingInfo exactEvents
+        digest `shouldBe` expectedCrossings
