@@ -55,6 +55,19 @@ extractMoonPhaseInfo evts =
     summarize (ExactEvent (LunarPhase LunarPhaseInfo{lunarPhaseName}) (firstExact:_)) =
       Just (lunarPhaseName, firstExact)
     summarize _ = Nothing
+    
+genericEventInfo :: Seq ExactEvent ->  [(String, UTCTime)]
+genericEventInfo evts =
+  fmap summarize evts & toList & catMaybes
+  where
+    summarize (ExactEvent e (firstExact:_)) =
+      case e of
+        Eclipse info -> 
+          case info of
+            SolarEclipse eclType _ -> Just ("Solar Eclipse (" <> show eclType <> ")", firstExact)
+            LunarEclipse eclType _ -> Just ("Lunar Eclipse (" <> show eclType <> ")", firstExact)
+        _ -> Just ("not implemented yet", firstExact)
+    summarize _ = Nothing
 
 mkUTC :: String -> UTCTime
 mkUTC = fromJust . iso8601ParseM
@@ -134,3 +147,21 @@ spec = beforeAll_ epheWithFallback $ do
         exactPhases <- runQuery q >>= eventsWithExactitude
         let digest = extractMoonPhaseInfo exactPhases
         digest `shouldBe` expectedPhases
+
+    context "QueryEclipse" $ do
+      it "finds all eclipses for 2021" $ do
+        let q = Mundane
+                  MundaneArgs{
+                    mInterval = Interval start2021 end2021,
+                    mQueries = [QueryEclipse]
+                  }
+            expectedEclipses =
+              [
+                ("Solar Eclipse (AnnularEclipse)","2021-06-10T10:41:56.099877655506Z"),
+                ("Solar Eclipse (TotalSolarEclipse)","2021-12-04T07:33:28.516712486743Z"),
+                ("Lunar Eclipse (TotalLunarEclipse)","2021-05-26T11:18:43.071934282779Z"),
+                ("Lunar Eclipse (PartialLunarEclipse)","2021-11-19T09:02:55.849740207195Z")
+              ] & map (second mkUTC)
+        exactEcl <- runQuery q >>= eventsWithExactitude
+        let digest = genericEventInfo exactEcl
+        digest `shouldBe` expectedEclipses
