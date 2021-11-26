@@ -48,6 +48,14 @@ extractCrossingInfo evts =
       Just (planet, motion, signName, firstExact)
     summarize _ = Nothing
 
+extractMoonPhaseInfo :: Seq ExactEvent -> [(LunarPhaseName, UTCTime)]
+extractMoonPhaseInfo evts =
+  fmap summarize evts & toList & catMaybes
+  where
+    summarize (ExactEvent (LunarPhase LunarPhaseInfo{lunarPhaseName}) (firstExact:_)) =
+      Just (lunarPhaseName, firstExact)
+    summarize _ = Nothing
+
 mkUTC :: String -> UTCTime
 mkUTC = fromJust . iso8601ParseM
 
@@ -102,3 +110,27 @@ spec = beforeAll_ epheWithFallback $ do
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = extractCrossingInfo exactEvents
         digest `shouldBe` expectedCrossings
+
+    context "QueryLunarPhase" $ do
+      it "finds all lunar phases in November 2021" $ do
+        let nov2021 = UTCTime (fromGregorian 2021 11 1) 0
+            dec2021 = UTCTime (fromGregorian 2021 12 1) 0
+            q = Mundane
+                  MundaneArgs{
+                    mInterval = Interval nov2021 dec2021,
+                    mQueries = [QueryLunarPhase]
+                  }
+            expectedPhases = 
+              [
+                (WaningCrescent,"2021-11-01T13:28:27.314121723175Z"),
+                (NewMoon,"2021-11-04T21:14:36.684200763702Z"),
+                (WaxingCrescent,"2021-11-08T02:31:28.868464529514Z"),
+                (FirstQuarter,"2021-11-11T12:46:02.566146254539Z"),
+                (WaxingGibbous,"2021-11-15T07:27:48.519482016563Z"),
+                (FullMoon,"2021-11-19T08:57:27.984892129898Z"),
+                (WaningGibbous,"2021-11-23T12:50:27.58442312479Z"),
+                (LastQuarter,"2021-11-27T12:27:40.648325085639Z")
+              ] & map (second mkUTC)
+        exactPhases <- runQuery q >>= eventsWithExactitude
+        let digest = extractMoonPhaseInfo exactPhases
+        digest `shouldBe` expectedPhases
