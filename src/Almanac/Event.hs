@@ -57,9 +57,13 @@ eventExactAt (HouseTransit t) = transitExactAt t
 eventExactAt (ZodiacIngress xn)= crossingExactAt xn
 eventExactAt (HouseIngress xn) = crossingExactAt xn
 
-crossingExactAt :: HasEclipticLongitude a => Crossing a -> IO [UTCTime]
-crossingExactAt Crossing{crossingPlanet, crossingCrosses, crossingStarts, crossingEnds}=
-  allCrossingsBetween crossingPlanet (getEclipticLongitude crossingCrosses) crossingStarts crossingEnds
+crossingExactAt :: IsEclipticBand a => Crossing a -> IO [UTCTime]
+crossingExactAt Crossing{crossingPlanet, crossingCrosses, crossingStarts, crossingEnds, crossingDirection}=
+  allCrossingsBetween 
+    crossingPlanet 
+    (if crossingDirection == DirectMotion then eclipticStart crossingCrosses else eclipticEnd crossingCrosses) 
+    crossingStarts 
+    crossingEnds
   >>= crossingsAsList
 
 transitExactAt :: Transit a -> IO [UTCTime]

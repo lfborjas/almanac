@@ -95,14 +95,9 @@ spec = beforeAll_ epheWithFallback $ do
                 (Mars,Libra,"2021-09-15T00:13:56.056096851825Z"),
                 (Mars,Scorpio,"2021-10-30T14:21:06.681294143199Z"),
                 (Mars,Sagittarius,"2021-12-13T09:52:56.338474452495Z"),
-                (Jupiter,Pisces,"2021-05-13T22:36:03.055363297462Z")
-                -- TODO(luis)
-                -- There's a retrograde ingress from Jupiter back
-                -- into Aquarius on Jul 28 @ 8am ET, and then back
-                -- to Pisces on Dec 28 @ 11pm ET. The logic
-                -- is currently flawed and only ingresses at the "beginning"
-                -- of a zodiac are considered, should refactor to consider
-                -- both the beginning and end.
+                (Jupiter,Pisces,"2021-05-13T22:36:03.055363297462Z"),
+                (Jupiter,Aquarius,"2021-07-28T12:42:09.763747751712Z"),
+                (Jupiter,Pisces,"2021-12-29T04:09:37.511599659919Z")
               ] & map (second mkUTC)
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = extractCrossingInfo exactEvents

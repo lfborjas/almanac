@@ -147,7 +147,7 @@ runNatalQuery (NatalArgs i@Interval{start,end} qs mqs ReferenceEvent{eventTime, 
     Left e -> fail e
     Right ref -> do
       CuspsCalculation{houseCusps} <- calculateCusps houseSystem ut1Event eventLocation
-      let houses = zipWith House [I .. XII] houseCusps
+      let houses = zipWith3 House [I .. XII] houseCusps (tail houseCusps <> [head houseCusps])
       pureFolded :> _ <-
         ephe
         & ephemerisWindows 2

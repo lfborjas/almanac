@@ -28,6 +28,10 @@ import Data.Time (UTCTime)
 -- Produce a third value that replaces either or both? See 'MergeStrategy'.
 class Merge a where
   merge :: a -> a -> MergeStrategy a
+  
+class IsEclipticBand a where
+  eclipticStart :: a -> Double
+  eclipticEnd :: a -> Double
 
 data MergeStrategy a
   = ReplaceBoth a a
@@ -192,11 +196,15 @@ instance Eq a => Merge (Crossing a) where
       }
 
 data Zodiac = Zodiac
-  { signName :: ZodiacSignName, signLng :: Double}
+  { signName :: ZodiacSignName, signStart :: Double, signEnd :: Double }
   deriving (Eq, Show)
 
 instance HasEclipticLongitude Zodiac where
-  getEclipticLongitude (Zodiac _ l) = l
+  getEclipticLongitude (Zodiac _ l _) = l
+  
+instance IsEclipticBand Zodiac where
+  eclipticStart = signStart
+  eclipticEnd = signEnd
 
 data HouseName
   = I
@@ -214,11 +222,15 @@ data HouseName
   deriving (Eq, Show, Enum, Ord)
 
 data House = House
-  { houseName :: HouseName, houseCusp :: Double }
+  { houseName :: HouseName, houseCusp :: Double, houseEnd :: Double }
   deriving (Eq, Show)
   
 instance HasEclipticLongitude House where
   getEclipticLongitude = houseCusp
+  
+instance IsEclipticBand House where
+  eclipticStart = houseCusp
+  eclipticEnd = houseEnd
 
 instance Ord House where
   a `compare` b = compare (houseCusp a) (houseCusp b)
