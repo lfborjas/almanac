@@ -49,6 +49,7 @@ instance Functor MergeStrategy where
 newtype MergeSeq a =
   MergeSeq {getMerged :: S.Seq a}
   deriving stock (Show)
+  deriving newtype Eq
   deriving Foldable via S.Seq
 
 singleton :: a -> MergeSeq a
@@ -105,14 +106,18 @@ data Event
   | HouseTransit     (Transit House)
   | LunarPhase       LunarPhaseInfo
   | Eclipse          EclipseInfo
-  deriving (Show)
+  deriving (Eq, Show)
 
 type EventSeq = MergeSeq Event
 
 -- | Events that travel with their moments of exactitude
 -- (stored as a separate datum since they usually require
 -- further trips through IO beyond just traversing an ephemeris.)
-data ExactEvent = ExactEvent Event [UTCTime]
+data ExactEvent = 
+  ExactEvent {
+    evt :: Event,
+    exactitudeMoments :: [UTCTime]
+  }
 
 -- | Alias for readability
 getEvents :: EventSeq -> S.Seq Event
@@ -278,7 +283,7 @@ data Transit over = Transit {
 , transitPhases :: !(MergeSeq TransitPhase)
 , transitIsExact :: ![JulianDayTT]
 , transitCrosses :: !EclipticLongitude
-} deriving (Show)
+} deriving (Eq, Show)
 
 instance Eq a => Merge (Transit a) where
   x `merge` y =
