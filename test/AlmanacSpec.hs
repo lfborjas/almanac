@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedLists #-}
 module AlmanacSpec (spec) where
 
+import Almanac
+import Almanac.Extras
 import Test.Hspec
 import System.Directory
 import SwissEphemeris
 import SwissEphemeris.Precalculated
-import Almanac
 import Data.Time
 import Data.Foldable (toList)
 import Data.Sequence hiding (zip, fromList)

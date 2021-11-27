@@ -40,6 +40,7 @@ library
     import: common-ghc-options
     exposed-modules: 
       Almanac 
+      Almanac.Extras
 
     -- Modules included in this library but not exported.
     other-modules:
@@ -53,7 +54,6 @@ library
       Almanac.Event.Types
       Almanac.Event
       Almanac.Query
-      Almanac.Extras
 
     -- other-extensions:
     build-depends:    
