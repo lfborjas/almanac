@@ -59,7 +59,7 @@ library
     build-depends:    
       base >= 4.13 && <= 4.17
       ,containers
-      ,swiss-ephemeris >= 1.4 && <2
+      ,swiss-ephemeris >= 1.4.1 && <2
       ,time
       ,streaming
       ,foldl
