@@ -72,7 +72,7 @@ data NatalQuery
 
 instance QueryStrategy NatalQuery where
   classifyQuery q@(QueryLunarNatalTransit _) = Left . NonComposable $ q
-  classifyQuery q@(QueryCuspTransit _) = Left . NonComposable $ q
+  classifyQuery q@(QueryLunarCuspTransit _) = Left . NonComposable $ q
   classifyQuery q = Right . Composable $ q
 
 data Interval =

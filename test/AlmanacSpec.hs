@@ -8,11 +8,13 @@ import SwissEphemeris.Precalculated
 import Almanac
 import Data.Time
 import Data.Foldable (toList)
-import Data.Sequence
+import Data.Sequence hiding (zip, fromList)
 import Data.Function
 import Data.Maybe (mapMaybe, fromJust, catMaybes)
 import Data.Bifunctor (second)
 import Data.Time.Format.ISO8601 (iso8601ParseM)
+import Data.List.NonEmpty (fromList)
+import qualified Data.Sequence as S
 
 ephePath :: FilePath
 ephePath = "./test/ephe/"
@@ -57,30 +59,34 @@ extractMoonPhaseInfo evts =
     summarize _ = Nothing
     
 -- | Ugly function to "pretty print" events
-genericEventInfo :: Seq ExactEvent ->  [(String, UTCTime)]
+genericEventInfo :: Seq ExactEvent ->  [(String, [UTCTime])]
 genericEventInfo evts =
   fmap summarize evts & toList & catMaybes
   where
-    summarize (ExactEvent e (firstExact:_)) =
+    summarize (ExactEvent e exacts) =
       case e of
         Eclipse info -> 
           case info of
-            SolarEclipse eclType _ -> Just ("Solar Eclipse (" <> show eclType <> ")", firstExact)
-            LunarEclipse eclType _ -> Just ("Lunar Eclipse (" <> show eclType <> ")", firstExact)
+            SolarEclipse eclType _ -> Just ("Solar Eclipse (" <> show eclType <> ")", exacts)
+            LunarEclipse eclType _ -> Just ("Lunar Eclipse (" <> show eclType <> ")", exacts)
         DirectionChange PlanetStation{stationType, stationPlanet} ->
           if stationType `elem` ([Direct, Retrograde] :: [Station] ) then
-            Just (show stationPlanet <> " goes " <> show stationType, firstExact)
+            Just (show stationPlanet <> " goes " <> show stationType, exacts)
           else
             Nothing
         ZodiacIngress (Crossing _s _e Zodiac{signName} planet motion) ->
-          Just (show planet <> " enters " <> show signName <> " (" <> show motion <> ")", firstExact)
+          Just (show planet <> " enters " <> show signName <> " (" <> show motion <> ")", exacts)
+        HouseIngress  (Crossing _s _e House{houseName} planet motion) ->
+          Just (show planet <> " enters house " <> show houseName <> " (" <> show motion <> ")", exacts)
         LunarPhase LunarPhaseInfo{lunarPhaseName} ->
           if lunarPhaseName `elem` ([FullMoon, NewMoon] :: [LunarPhaseName]) then
-            Just (show lunarPhaseName, firstExact)
+            Just (show lunarPhaseName, exacts)
           else
             Nothing
-        _ -> Just ("not implemented yet", firstExact)
-    summarize _ = Nothing
+        PlanetaryTransit Transit{transiting, aspect, transited} ->
+          Just (show transiting <> " " <> show aspect <> " " <> show transited, exacts)
+        HouseTransit Transit{transiting, aspect, transited} ->
+          Just (show transiting <> " " <> show aspect <> " " <> (show . houseName $ transited), exacts)
 
 mkUTC :: String -> UTCTime
 mkUTC = fromJust . iso8601ParseM
@@ -174,7 +180,7 @@ spec = beforeAll_ epheWithFallback $ do
                 ("Solar Eclipse (TotalSolarEclipse)","2021-12-04T07:33:28.516712486743Z"),
                 ("Lunar Eclipse (TotalLunarEclipse)","2021-05-26T11:18:43.071934282779Z"),
                 ("Lunar Eclipse (PartialLunarEclipse)","2021-11-19T09:02:55.849740207195Z")
-              ] & map (second mkUTC)
+              ] & map (second (pure . mkUTC))
         exactEcl <- runQuery q >>= eventsWithExactitude
         let digest = genericEventInfo exactEcl
         digest `shouldBe` expectedEclipses
@@ -202,9 +208,44 @@ spec = beforeAll_ epheWithFallback $ do
                 ("NewMoon","2021-11-04T21:14:36.684200763702Z"),
                 ("FullMoon","2021-11-19T08:57:27.984892129898Z"),
                 ("Lunar Eclipse (PartialLunarEclipse)","2021-11-19T09:02:55.849740207195Z")
-              ] & map (second mkUTC)
+              ] & map (second (pure . mkUTC))
         exactEvents <- runQuery q >>= eventsWithExactitude 
         let digest = genericEventInfo exactEvents
         digest `shouldBe` expectedEvents
 
- 
+    context "Composite natal query" $ do
+      it "finds all events for an interval, for a reference event" $ do
+        let gestern = UTCTime (fromGregorian 2021 11 25) 0
+            morgen  = UTCTime (fromGregorian 2021 11 27) 0 
+            q = Natal
+                  NatalArgs {
+                    nInterval = Interval gestern morgen,
+                    nReferenceEvent = 
+                      ReferenceEvent 
+                        (mkUTC "1989-01-07T05:30:00Z") 
+                        (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ),
+                    nQueries = [
+                      QueryHouseIngress [Moon],
+                      -- all possible pairs, without a transiting Moon
+                      QueryPlanetaryNatalTransit $ fromList (filteredPairs allPairs (tail defaultPlanets) defaultPlanets),
+                      QueryCuspTransit $ fromList (filteredPairs allCuspPairs (tail defaultPlanets) [I,X]),
+                      QueryLunarNatalTransit $ fromList defaultPlanets,
+                      QueryLunarCuspTransit [I,X]
+                    ],
+                    nMundaneQueries = [],
+                    nHouseSystem = Placidus
+                  }
+            expectedEvents =
+              [
+                ("Moon enters house XI (DirectMotion)","2021-11-25T13:44:39.7735825181Z"),
+                ("Venus Conjunction Sun","2021-11-25T11:33:25.524118244647Z"),
+                ("Moon Opposition Mercury","2021-11-25T03:30:50.045527517795Z"),
+                ("Moon Trine Venus","2021-11-26T17:49:45.178953409194Z"),
+                ("Moon Trine Mars","2021-11-26T13:42:52.33622521162Z"),
+                ("Moon Square Jupiter","2021-11-26T19:20:45.90741097927Z"),
+                ("Moon Square Pluto","2021-11-25T20:53:55.02881526947Z"),
+                ("Moon Sextile I","2021-11-25T15:09:36.979006826877Z")
+              ] & map (second (pure . mkUTC))
+        exactEvents <- runQuery q >>= eventsWithExactitude 
+        let digest = genericEventInfo $ S.filter hasExactitude exactEvents
+        digest `shouldBe` expectedEvents

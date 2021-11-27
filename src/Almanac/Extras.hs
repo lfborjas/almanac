@@ -14,6 +14,7 @@ import Almanac.Event (eventsWithExactitude)
 import SwissEphemeris
 import Data.List (tails)
 import Data.Tuple (swap)
+import Control.Applicative (liftA2)
 
 -- | Somewhat opinionated event filter:
 -- If the event is a transit, only keep it if the transiting body is a slow planet,
@@ -23,12 +24,12 @@ filterEvents :: Sq.Seq ExactEvent -> Sq.Seq ExactEvent
 filterEvents = Sq.filter isRelevantEvent
 
 -- | Arbitrary test to see if an event is relevant enough to show in
--- a UI, or process further.
+-- a UI, or process further. Note that close orbs are not counted.
 isRelevantEvent :: ExactEvent -> Bool
 isRelevantEvent evt@(ExactEvent (PlanetaryTransit t) _e) =
-  isSlowTransit t || isCloseOrb t || hasExactitude evt
+  isSlowTransit t || hasExactitude evt
 isRelevantEvent evt@(ExactEvent (HouseTransit t) _e) =
-  isSlowTransit t || isCloseOrb t || hasExactitude evt
+  isSlowTransit t || hasExactitude evt
 isRelevantEvent e = hasExactitude e
 
 -- | Determine if the last orb for a planet in a given
@@ -62,6 +63,9 @@ indexedByDay tz evts = eventsWithExactitude evts <&> (filterEvents >>> indexByDa
 uniquePairs :: [(Planet, Planet)]
 uniquePairs =
   [(p1, p2) | (p1:ps) <- tails defaultPlanets, p2 <- ps]
+
+allCuspPairs :: [(Planet, HouseName)]
+allCuspPairs = liftA2 (,) defaultPlanets [I .. XII]
 
 {-
 The default sorting of planets here was obtained by looking at 100 years of average speeds
@@ -118,7 +122,7 @@ allPairs =
   where
     selfPairs = zip defaultPlanets defaultPlanets
 
-filteredPairs :: [(Planet, Planet)] -> [Planet] -> [Planet] -> [(Planet, Planet)]
+filteredPairs :: Eq a => [(Planet, a)] -> [Planet] -> [a] -> [(Planet, a)]
 filteredPairs pairs transiting transited =
   pairs
   & filter (uncurry (&&) . bimap (`elem` transiting) (`elem` transited))

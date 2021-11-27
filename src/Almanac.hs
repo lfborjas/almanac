@@ -9,6 +9,7 @@ module Almanac (
   Station(..),
   Zodiac(..),
   House(..),
+  HouseName(..),
   ExactEvent(..),
   -- * Event queries
   module Almanac.Query,
