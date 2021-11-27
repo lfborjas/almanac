@@ -1,111 +1,46 @@
 {-# LANGUAGE OverloadedLists #-}
 module AlmanacSpec (spec) where
 
+import Test.Hspec
 import Almanac
 import Almanac.Extras
-import Test.Hspec
-import System.Directory
 import SwissEphemeris
-import SwissEphemeris.Precalculated
-import Data.Time
+    ( GeographicPosition(GeographicPosition, geoLat, geoLng),
+      LunarPhaseName(LastQuarter, WaningCrescent, NewMoon,
+                     WaxingCrescent, FirstQuarter, WaxingGibbous, FullMoon,
+                     WaningGibbous),
+      ZodiacSignName(Pisces, Taurus, Gemini, Cancer, Leo, Virgo, Libra,
+                     Scorpio, Sagittarius, Aquarius),
+      PlanetMotion(DirectMotion, RetrogradeMotion),
+      Planet(Moon, Mercury, Mars, Jupiter, Saturn, Chiron, Uranus,
+             Neptune, Pluto) )
+import Data.Time ( fromGregorian, UTCTime(UTCTime) )
 import Data.Foldable (toList)
-import Data.Sequence hiding (zip, fromList)
 import Data.Function
-import Data.Maybe (mapMaybe, fromJust, catMaybes)
 import Data.Bifunctor (second)
-import Data.Time.Format.ISO8601 (iso8601ParseM)
 import Data.List.NonEmpty (fromList)
 import qualified Data.Sequence as S
-
-ephePath :: FilePath
-ephePath = "./test/ephe/"
-
-epheWithFallback :: IO ()
-epheWithFallback = do
-  fullEphePath <- makeAbsolute ephePath
-  -- location of ephe data
-  setEphemeridesPath fullEphePath
-  -- location of precalculated ephe
-  setEphe4Path fullEphePath
-
--- | Extract only the first moment of exactitude of retrograde or direct
--- stations.
-extractStationInfo :: Seq ExactEvent -> [(Station, UTCTime)]
-extractStationInfo evts =
-  Data.Sequence.filter relevantStation evts
-  & toList
-  & mapMaybe summarize
-  where
-    relevantStation (ExactEvent (DirectionChange PlanetStation{stationType}) _) =
-      stationType `elem` ([Direct, Retrograde] :: [Station])
-    relevantStation _ = False
-    summarize (ExactEvent (DirectionChange PlanetStation{stationType}) (firstExact:_)) =
-      Just (stationType, firstExact)
-    summarize _ = Nothing
-
-extractCrossingInfo :: Seq ExactEvent -> [(Planet, PlanetMotion, ZodiacSignName, UTCTime)]
-extractCrossingInfo evts =
-  fmap summarize evts & toList & catMaybes
-  where
-    summarize (ExactEvent (ZodiacIngress (Crossing _s _e Zodiac{signName} planet motion)) (firstExact:_)) =
-      Just (planet, motion, signName, firstExact)
-    summarize _ = Nothing
-
-extractMoonPhaseInfo :: Seq ExactEvent -> [(LunarPhaseName, UTCTime)]
-extractMoonPhaseInfo evts =
-  fmap summarize evts & toList & catMaybes
-  where
-    summarize (ExactEvent (LunarPhase LunarPhaseInfo{lunarPhaseName}) (firstExact:_)) =
-      Just (lunarPhaseName, firstExact)
-    summarize _ = Nothing
-    
--- | Ugly function to "pretty print" events
-genericEventInfo :: Seq ExactEvent ->  [(String, [UTCTime])]
-genericEventInfo evts =
-  fmap summarize evts & toList & catMaybes
-  where
-    summarize (ExactEvent e exacts) =
-      case e of
-        Eclipse info -> 
-          case info of
-            SolarEclipse eclType _ -> Just ("Solar Eclipse (" <> show eclType <> ")", exacts)
-            LunarEclipse eclType _ -> Just ("Lunar Eclipse (" <> show eclType <> ")", exacts)
-        DirectionChange PlanetStation{stationType, stationPlanet} ->
-          if stationType `elem` ([Direct, Retrograde] :: [Station] ) then
-            Just (show stationPlanet <> " goes " <> show stationType, exacts)
-          else
-            Nothing
-        ZodiacIngress (Crossing _s _e Zodiac{signName} planet motion) ->
-          Just (show planet <> " enters " <> show signName <> " (" <> show motion <> ")", exacts)
-        HouseIngress  (Crossing _s _e House{houseName} planet motion) ->
-          Just (show planet <> " enters house " <> show houseName <> " (" <> show motion <> ")", exacts)
-        LunarPhase LunarPhaseInfo{lunarPhaseName} ->
-          if lunarPhaseName `elem` ([FullMoon, NewMoon] :: [LunarPhaseName]) then
-            Just (show lunarPhaseName, exacts)
-          else
-            Nothing
-        PlanetaryTransit Transit{transiting, aspect, transited} ->
-          Just (show transiting <> " " <> show aspect <> " " <> show transited, exacts)
-        HouseTransit Transit{transiting, aspect, transited} ->
-          Just (show transiting <> " " <> show aspect <> " " <> (show . houseName $ transited), exacts)
-
-mkUTC :: String -> UTCTime
-mkUTC = fromJust . iso8601ParseM
+import SpecUtils
+    ( epheWithFallback,
+      extractStationInfo,
+      extractCrossingInfo,
+      extractMoonPhaseInfo,
+      genericEventInfo,
+      mkUTC )
 
 start2021, end2021 :: UTCTime
 start2021 = UTCTime (fromGregorian 2021 1 1) 0
 end2021 = UTCTime (fromGregorian 2022 1 1) 0
 
+-- Results verified at: https://cafeastrology.com/astrology-of-2021.html
 spec :: Spec
 spec = beforeAll_ epheWithFallback $ do
   describe "runQuery" $ do
     context "QueryDirectionChange" $ do
       it "finds all the changes of direction for Mercury in 2021" $ do
-        let q = Mundane
-                  MundaneArgs{
-                    mInterval = Interval start2021 end2021,
-                    mQueries = [QueryDirectionChange [Mercury]]
-                  }
+        let q = mundane  
+                  (Interval start2021 end2021)
+                  [QueryDirectionChange [Mercury]]
             expectedStations =
               [
                 (Retrograde,"2021-01-30T15:51:42.025379240512Z"),
@@ -121,11 +56,9 @@ spec = beforeAll_ epheWithFallback $ do
 
     context "QueryZodiacIngress" $ do
       it "finds all ingresses in 2021" $ do
-        let q = Mundane
-                  MundaneArgs{
-                    mInterval = Interval start2021 end2021,
-                    mQueries = [QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto]]
-                  }
+        let q = mundane 
+                  (Interval start2021 end2021)
+                  [QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto]]
             expectedCrossings =
               [
                 (Mars,DirectMotion, Taurus,"2021-01-06T22:27:01.465341746807Z"),
@@ -148,11 +81,9 @@ spec = beforeAll_ epheWithFallback $ do
       it "finds all lunar phases in November 2021" $ do
         let nov2021 = UTCTime (fromGregorian 2021 11 1) 0
             dec2021 = UTCTime (fromGregorian 2021 12 1) 0
-            q = Mundane
-                  MundaneArgs{
-                    mInterval = Interval nov2021 dec2021,
-                    mQueries = [QueryLunarPhase]
-                  }
+            q = mundane
+                  (Interval nov2021 dec2021)
+                  [QueryLunarPhase]
             expectedPhases = 
               [
                 (WaningCrescent,"2021-11-01T13:28:27.314121723175Z"),
@@ -170,11 +101,9 @@ spec = beforeAll_ epheWithFallback $ do
 
     context "QueryEclipse" $ do
       it "finds all eclipses for 2021" $ do
-        let q = Mundane
-                  MundaneArgs{
-                    mInterval = Interval start2021 end2021,
-                    mQueries = [QueryEclipse]
-                  }
+        let q = mundane
+                  (Interval start2021 end2021)
+                  [QueryEclipse]
             expectedEclipses =
               [
                 ("Solar Eclipse (AnnularEclipse)","2021-06-10T10:41:56.099877655506Z"),
@@ -190,16 +119,14 @@ spec = beforeAll_ epheWithFallback $ do
       it "finds all events for October/November 2021" $ do
         let oct2021 = UTCTime (fromGregorian 2021 10 1) 0
             dec2021 = UTCTime (fromGregorian 2021 12 1) 0
-            q = Mundane
-                  MundaneArgs{
-                    mInterval = Interval oct2021 dec2021,
-                    mQueries = [
-                      QueryDirectionChange [Mercury],
-                      QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto],
-                      QueryEclipse,
-                      QueryLunarPhase
-                    ]
-                  }
+            q = mundane
+                  (Interval oct2021 dec2021)
+                  [
+                    QueryDirectionChange [Mercury],
+                    QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto],
+                    QueryEclipse,
+                    QueryLunarPhase
+                  ]
             expectedEvents = 
               [
                 ("Mercury goes Direct","2021-10-18T15:16:50.452575981616Z"),
@@ -218,24 +145,19 @@ spec = beforeAll_ epheWithFallback $ do
       it "finds all events for an interval, for a reference event" $ do
         let gestern = UTCTime (fromGregorian 2021 11 25) 0
             morgen  = UTCTime (fromGregorian 2021 11 27) 0 
-            q = Natal
-                  NatalArgs {
-                    nInterval = Interval gestern morgen,
-                    nReferenceEvent = 
-                      ReferenceEvent 
-                        (mkUTC "1989-01-07T05:30:00Z") 
-                        (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ),
-                    nQueries = [
-                      QueryHouseIngress [Moon],
-                      -- all possible pairs, without a transiting Moon
-                      QueryPlanetaryNatalTransit $ fromList (filteredPairs allPairs (tail defaultPlanets) defaultPlanets),
-                      QueryCuspTransit $ fromList (filteredPairs allCuspPairs (tail defaultPlanets) [I,X]),
-                      QueryLunarNatalTransit $ fromList defaultPlanets,
-                      QueryLunarCuspTransit [I,X]
-                    ],
-                    nMundaneQueries = [],
-                    nHouseSystem = Placidus
-                  }
+            q = natal
+                  (Interval gestern morgen)
+                  (ReferenceEvent 
+                    (mkUTC "1989-01-07T05:30:00Z") 
+                    (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ))
+                  [
+                    QueryHouseIngress [Moon],
+                    -- all possible pairs, without a transiting Moon
+                    QueryPlanetaryNatalTransit $ fromList (filteredPairs allPairs (tail defaultPlanets) defaultPlanets),
+                    QueryCuspTransit $ fromList (filteredPairs allCuspPairs (tail defaultPlanets) [I,X]),
+                    QueryLunarNatalTransit $ fromList defaultPlanets,
+                    QueryLunarCuspTransit [I,X]
+                  ]
             expectedEvents =
               [
                 ("Moon enters house XI (DirectMotion)","2021-11-25T13:44:39.7735825181Z"),

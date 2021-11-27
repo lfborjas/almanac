@@ -9,6 +9,9 @@ module Almanac.Query (
   MundaneArgs(..),
   NatalArgs(..),
   Interval(..),
+  -- * Query construction
+  mundane,
+  natal,
   -- * Query execution
   runQuery
 ) where
@@ -33,6 +36,10 @@ import Control.Category ((>>>))
 import Streaming (lift, MonadIO (..))
 import qualified Data.Foldable as F
 import Data.Either (partitionEithers)
+-- NOTE(luis) this covers the more general use case, so making an exception;
+-- but we could technically require the query to specify _which_ signs it wants
+-- to use, which would allow usage of Nakshatras, too
+import Almanac.Extras (westernZodiacSigns)
 
 
 -- | Internal utility typeclass to signal how a query is to be processed:
@@ -96,9 +103,9 @@ data MundaneArgs =
 data NatalArgs =
   NatalArgs {
     nInterval :: Interval,
+    nReferenceEvent :: ReferenceEvent,
     nQueries  :: NonEmpty NatalQuery,
     nMundaneQueries :: [MundaneQuery],
-    nReferenceEvent :: ReferenceEvent,
     nHouseSystem :: HouseSystem
   }
 
@@ -110,6 +117,14 @@ runQuery :: Query -> IO (Seq Event)
 runQuery (Mundane args) = runMundaneQuery args
 runQuery (Natal   args) = runNatalQuery args
 
+-- | Convenience constructor of a mundane query
+mundane :: Interval -> NonEmpty MundaneQuery -> Query
+mundane i qs = Mundane $ MundaneArgs i qs
+
+-- | Convenience constructor of a natal query without additional
+-- mundane queries, and the 'Placidus' house system.
+natal :: Interval -> ReferenceEvent -> NonEmpty NatalQuery -> Query
+natal i r qs = Natal $ NatalArgs i r qs [] Placidus
 -------------------------------------------------------------------------------
 -- QUERY UTILITIES
 -------------------------------------------------------------------------------
@@ -134,7 +149,7 @@ runMundaneQuery (MundaneArgs i@Interval{start,end} qs) = do
   pure $ mconcat pureFolded <> mconcat impureFolded
 
 runNatalQuery :: NatalArgs -> IO (Seq Event)
-runNatalQuery (NatalArgs i@Interval{start,end} qs mqs ReferenceEvent{eventTime, eventLocation} houseSystem) = do
+runNatalQuery (NatalArgs i@Interval{start,end} ReferenceEvent{eventTime, eventLocation} qs mqs houseSystem) = do
   Just ttStart <- toJulianDay start
   Just ttEnd   <- toJulianDay end
   Just ttEvent <- toJulianDay eventTime

@@ -38,13 +38,16 @@ isRelevantEvent e = hasExactitude e
 isCloseOrb :: Transit a -> Bool
 isCloseOrb Transit{transitOrb} = transitOrb < 3
 
+-- | Is the planet transiting one of the slower moving planets?
 isSlowTransit :: Transit a -> Bool
 isSlowTransit Transit{transiting} =
   transiting `elem` slowPlanets
 
+-- | Did we find at least one moment of exactitude for the given Event?
 hasExactitude :: ExactEvent -> Bool
 hasExactitude (ExactEvent _ xs) = not . null $ xs
 
+-- | Return a 'Map' of events indexed by 'Day' in a given 'TimeZone'
 indexByDay :: TimeZone -> Sq.Seq ExactEvent -> M.Map Day (Sq.Seq ExactEvent)
 indexByDay tz events =
   foldMap' repeatPerEvent events
@@ -55,6 +58,7 @@ indexByDay tz events =
       zip (map (utcToZonedTime tz) exacts) (repeat $ Sq.singleton e)
     getDay (ZonedTime (LocalTime d _tod) _tz) = d
 
+-- | Convenience function to go from a sequence of events to a map of indexed events
 indexedByDay :: TimeZone -> Sq.Seq Event -> IO (M.Map Day (Sq.Seq ExactEvent))
 indexedByDay tz evts = eventsWithExactitude evts <&> (filterEvents >>> indexByDay tz)
 
@@ -126,3 +130,53 @@ filteredPairs :: Eq a => [(Planet, a)] -> [Planet] -> [a] -> [(Planet, a)]
 filteredPairs pairs transiting transited =
   pairs
   & filter (uncurry (&&) . bimap (`elem` transiting) (`elem` transited))
+
+westernZodiacSigns :: [Zodiac]
+westernZodiacSigns =
+  zipWith3 Zodiac [Aries .. Pisces] zodiacs (map (+30) zodiacs)
+  where
+    zodiacs = take 12 $ iterate (+ 30) 0
+
+-- | When looking at natal transits, you _probably_ want all planets
+-- including slow+fast pairs and pairs with themselves. You may
+-- not want the Moon, since it moves very fast and daily ephemeris
+-- analysis won't catch _all_ of its transits. That's why 'QueryLunarTransit'
+-- is provided as a separate query (you can always include the moon
+-- in planetary transits, nothing will explode--it just may not show up)
+defaultNatalTransitPairs :: [(Planet, Planet)]
+defaultNatalTransitPairs = 
+  filteredPairs 
+    allPairs
+    (tail defaultPlanets)
+    defaultPlanets
+
+-- | When looking at mundane transits, you're very like to want to
+-- see fast planets transiting slow planets, sans the moon.
+defaultMundaneTransitPairs :: [(Planet, Planet)]
+defaultMundaneTransitPairs =
+  filteredPairs
+    uniquePairs
+    (tail defaultPlanets)
+    defaultPlanets
+    
+-- | When looking at cusp transits, it's very likely you don't
+-- want to look at the Moon (there's a special query for her
+-- 'QueryLunarCuspTransit':) this is because we use a faster
+-- interpolation to find lunar intersections, vs. trying to
+-- examine daily increments (which the Moon may evade!)
+defaultCuspTransiting :: [HouseName] -> [(Planet, HouseName)]
+defaultCuspTransiting =
+  filteredPairs
+    allCuspPairs
+    (tail defaultPlanets)
+
+-- | In most astrological applications, only transits with
+-- the Ascendant and MC are examined
+defaultHouses :: [HouseName]
+defaultHouses = [I, X]
+
+-- | In most astrological applications, only transits with
+-- the Ascendant and MC are examined, so we provide
+-- a list of pairs of all planets to those
+defaultCuspTransitPairs :: [(Planet, HouseName)]
+defaultCuspTransitPairs = defaultCuspTransiting defaultHouses

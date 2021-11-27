@@ -11,7 +11,6 @@ import Almanac.Import ( concatForEach )
 import SwissEphemeris
     ( Planet,
       PlanetMotion(DirectMotion, RetrogradeMotion),
-      ZodiacSignName(Pisces, Aries),
       JulianDayTT )
 import Data.Sequence (Seq(..))
 import SwissEphemeris.Precalculated
@@ -22,7 +21,7 @@ import Data.Foldable (Foldable(toList))
 import Data.Maybe (mapMaybe)
 import Almanac.Event.Types
     ( House,
-      Zodiac(Zodiac),
+      Zodiac(..),
       Crossing(..),
       Event(HouseIngress, ZodiacIngress),
       singleton,
@@ -82,9 +81,3 @@ crossesRetrograde p1 p2 toCross =
     p1 >= toCross && p2 < (toCross + 360)
   else
     p1 >= toCross && p2 < toCross
-
-westernZodiacSigns :: [Zodiac]
-westernZodiacSigns =
-  zipWith3 Zodiac [Aries .. Pisces] zodiacs (map (+30) zodiacs)
-  where
-    zodiacs = take 12 $ iterate (+ 30) 0

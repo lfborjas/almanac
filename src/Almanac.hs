@@ -14,12 +14,10 @@ module Almanac (
   -- * Event queries
   module Almanac.Query,
   -- * Event handling and processing
-  module Almanac.Event,
-  westernZodiacSigns
+  module Almanac.Event
+  
 ) where
 
 import Almanac.Event.Types
 import Almanac.Query
 import Almanac.Event
--- TODO(luis) move to Extras
-import Almanac.Event.Crossing (westernZodiacSigns)
