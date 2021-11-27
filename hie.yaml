@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:almanac"
+
+    - path: "test"
+      component: "almanac:test:almanac-test"

@@ -9,24 +9,20 @@ import Data.Sequence (Seq ((:<|)), fromList)
 import qualified Data.Map as M
 import SwissEphemeris
     ( HasEclipticLongitude(getEclipticLongitude),
-      Planet(Pluto, Moon, Mercury, Venus, Sun, Mars, Jupiter, MeanApog,
-             Saturn, MeanNode, Chiron, Uranus, Neptune), JulianDayTT, moonCrossingBetween, mkJulianDay, SingTimeStandard (STT), JulianDay (getJulianDay) )
+      Planet(Moon), JulianDayTT, moonCrossingBetween, mkJulianDay, SingTimeStandard (STT), JulianDay (getJulianDay) )
 import SwissEphemeris.Precalculated
     ( planetEphe,
       Ephemeris(epheDate, ephePositions),
       EphemerisPosition(epheLongitude, epheSpeed, ephePlanet) )
 import Data.Fixed (mod')
 import Control.Monad (guard, join)
-import Data.List (tails, nub)
+import Data.List (nub)
 import Control.Applicative (liftA2)
 import Almanac.EclipticLongitude ( EclipticLongitude(..), (<->), toEclipticLongitude )
-import Data.Function
 import Almanac.Event.Types
 import Data.Foldable (foldMap')
 import Data.Either (rights)
-import Data.Tuple (swap)
 import Almanac.Import (concatForEach)
-import Data.Bifunctor (bimap)
 import Almanac.Event.PlanetStation
 
 type EphemerisPoint = (JulianDayTT, EphemerisPosition Double)
@@ -83,73 +79,6 @@ staticPosition :: Maybe (EphemerisPosition Double) -> Maybe (EphemerisPosition D
 staticPosition (Just pos) = Just $ pos{epheSpeed = 0.0}
 staticPosition Nothing = Nothing
 
--- | All distinct pairings of  planets, with the one that's faster
--- on average as the first of the pair, always.
-uniquePairs :: [(Planet, Planet)]
-uniquePairs =
-  [(p1, p2) | (p1:ps) <- tails defaultPlanets, p2 <- ps]
-
-{-
-The default sorting of planets here was obtained by looking at 100 years of average speeds:
-cabal new-run laboratorium -- query -q "Averages" -s "1989-01-01" -e "2089-01-01" --ephe-path "./ephe"
-Up to date
-[(Moon,13.176522281580842),
-(Mercury,1.2173611188617248),
-(Venus,1.042309783743218),
-(Sun,0.9856478045400626),
-(Mars,0.5679595888524764),
-(Jupiter,0.13204562470426282),
-(MeanApog,0.11140269708380175),
-(Saturn,6.881223337573507e-2),
-(MeanNode,5.295424163793801e-2),
-(Chiron,5.2216388904251725e-2),
-(Uranus,3.229203526261477e-2),
-(Neptune,2.112966146937543e-2),
-(Pluto,2.060110471243601e-2)]
--}
-
-defaultPlanets :: [Planet]
-defaultPlanets =
-      [ Moon
-      , Mercury
-      , Venus
-      , Sun
-      , Mars
-      , Jupiter
-      , MeanApog
-      , Saturn
-      , MeanNode
-      , Chiron
-      , Uranus
-      , Neptune
-      , Pluto
-      ]
-
-slowPlanets :: [Planet]
-slowPlanets =
-  [ Jupiter
-  , MeanApog
-  , Saturn
-  , MeanNode
-  , Chiron
-  , Uranus
-  , Neptune
-  , Pluto
-  ]
-
--- All pairs, including a planet with itself and slow planets transiting fast ones (vs the usual,
--- fast ones over slow ones) -- useful for natal transits
-allPairs :: [(Planet, Planet)]
-allPairs =
-  uniquePairs <> map swap uniquePairs <> selfPairs
-  where
-    selfPairs = zip defaultPlanets defaultPlanets
-
-filteredPairs :: [(Planet, Planet)] -> [Planet] -> [Planet] -> [(Planet, Planet)]
-filteredPairs pairs transiting transited =
-  pairs
-  & filter (uncurry (&&) . bimap (`elem` transiting) (`elem` transited))
-
 sextile, square, trine, opposition, conjunction :: Aspect
 conjunction = Aspect Conjunction 0 5 5
 sextile = Aspect Sextile 60 5 5
@@ -182,7 +111,7 @@ mkTransit ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
         rel = relation before' after' ref
         phase = transitPhase station rel
         phaseInfo = singleton $ TransitPhase phase t1 t2
-    pure 
+    pure
       Transit {
         aspect = aspectName,
         transiting = ephePlanet p11,
@@ -195,7 +124,7 @@ mkTransit ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
         transitIsExact = mempty,
         transitCrosses = meets
       }
-     
+
 
 
 -------------------------------------------------------------------------------
@@ -288,17 +217,20 @@ normalize points@(p1, p2, ref)
   where
     translate = (+90)
 
-selectLunarTransits :: JulianDayTT -> JulianDayTT -> Ephemeris Double -> IO (Grouped (Planet, Planet) Event)
-selectLunarTransits start end natalEphemeris =
+selectLunarTransits :: JulianDayTT -> JulianDayTT -> Ephemeris Double -> [Planet] -> IO (Grouped (Planet, Planet) Event)
+selectLunarTransits start end natalEphemeris chosenPlanets =
   foldMap' mkLunarTransit (ephePositions natalEphemeris)
   where
     mkLunarTransit :: EphemerisPosition Double -> IO (Grouped (Planet, Planet) Event)
     mkLunarTransit pos = do
-      transit <- lunarAspects ephePlanet start end pos --(EclipticLongitude . epheLongitude $ pos)
-      if null transit then
-        mempty
+      if ephePlanet pos `elem` chosenPlanets then do
+        transit <- lunarAspects ephePlanet start end pos --(EclipticLongitude . epheLongitude $ pos)
+        if null transit then
+          mempty
+        else
+          pure $ Aggregate $ M.fromList [((Moon, ephePlanet pos), MergeSeq . fromList . map PlanetaryTransit $ transit)]
       else
-        pure $ Aggregate $ M.fromList [((Moon, ephePlanet pos), MergeSeq . fromList . map PlanetaryTransit $ transit)]
+        mempty
 
 selectLunarCuspTransits :: JulianDayTT -> JulianDayTT -> [House]-> IO (Grouped (Planet, House) Event)
 selectLunarCuspTransits start end =
@@ -306,7 +238,7 @@ selectLunarCuspTransits start end =
   where
     mkLunarTransit :: House -> IO (Grouped (Planet, House) Event)
     mkLunarTransit pos = do
-      transit <- lunarAspects id start end pos 
+      transit <- lunarAspects id start end pos
       if null transit then
         mempty
       else

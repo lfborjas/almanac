@@ -9,28 +9,26 @@ module Almanac.Event.Crossing where
 
 import Almanac.Import ( concatForEach )
 import SwissEphemeris
-    ( HasEclipticLongitude(..),
-      Planet,
+    ( Planet,
       PlanetMotion(DirectMotion, RetrogradeMotion),
-      ZodiacSignName(Pisces, Aries),
       JulianDayTT )
 import Data.Sequence (Seq(..))
 import SwissEphemeris.Precalculated
     ( Ephemeris(ephePositions, epheDate),
-      EphemerisPosition(epheLongitude, ephePlanet, epheSpeed) )
+      EphemerisPosition(epheLongitude, ephePlanet) )
 import qualified Data.Map as M
 import Data.Foldable (Foldable(toList))
 import Data.Maybe (mapMaybe)
 import Almanac.Event.Types
     ( House,
-      Zodiac(Zodiac),
+      Zodiac(..),
       Crossing(..),
       Event(HouseIngress, ZodiacIngress),
       singleton,
       Grouped,
-      Aggregate(Aggregate) )
+      Aggregate(Aggregate), IsEclipticBand(..) )
 
-getCrossings' :: HasEclipticLongitude a => (Crossing a -> Event ) -> [Planet] -> [a] -> Seq (Ephemeris Double) -> Grouped Planet Event
+getCrossings' :: IsEclipticBand a => (Crossing a -> Event ) -> [Planet] -> [a] -> Seq (Ephemeris Double) -> Grouped Planet Event
 getCrossings' mkEvent selectedPlanets degreesToCross (pos1 :<| pos2 :<| _) =
   concatForEach (zip (toList $ ephePositions pos1) (toList $ ephePositions pos2)) $ \(p1, p2) ->
     if ephePlanet p1 `notElem` selectedPlanets then
@@ -50,15 +48,23 @@ getZodiacCrossings = getCrossings' ZodiacIngress
 getHouseCrossings :: [Planet] -> [House] -> Seq (Ephemeris Double) -> Grouped Planet Event
 getHouseCrossings = getCrossings' HouseIngress 
 
-mkCrossing :: HasEclipticLongitude a => (JulianDayTT, EphemerisPosition Double) -> (JulianDayTT, EphemerisPosition Double) -> a -> Maybe (Crossing a)
+mkCrossing :: IsEclipticBand a => (JulianDayTT, EphemerisPosition Double) -> (JulianDayTT, EphemerisPosition Double) -> a -> Maybe (Crossing a)
 mkCrossing (d1, pos1) (d2, pos2) toCross
-  | crossesDirect (epheLongitude pos1) (epheLongitude pos2) (getEclipticLongitude toCross) =
+  | crossesDirect (epheLongitude pos1) (epheLongitude pos2) (eclipticStart toCross) =
      Just $ Crossing {
         crossingStarts = d1,
         crossingEnds = d2,
         crossingCrosses = toCross,
         crossingPlanet = ephePlanet pos1,
-        crossingDirection = if epheSpeed pos2 < 0 then RetrogradeMotion  else DirectMotion
+        crossingDirection = DirectMotion
+      }
+  | crossesRetrograde (epheLongitude pos1) (epheLongitude  pos2) (eclipticEnd toCross) =
+      Just $ Crossing {
+        crossingStarts = d1,
+        crossingEnds = d2,
+        crossingCrosses = toCross,
+        crossingPlanet = ephePlanet pos1,
+        crossingDirection = RetrogradeMotion 
       }
   | otherwise = Nothing
 
@@ -75,9 +81,3 @@ crossesRetrograde p1 p2 toCross =
     p1 >= toCross && p2 < (toCross + 360)
   else
     p1 >= toCross && p2 < toCross
-
-westernZodiacSigns :: [Zodiac]
-westernZodiacSigns =
-  zipWith Zodiac [Aries .. Pisces] zodiacs
-  where
-    zodiacs = take 12 $ iterate (+ 30) 0

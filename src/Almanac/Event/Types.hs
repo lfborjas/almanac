@@ -16,6 +16,7 @@ import Almanac.EclipticLongitude ( EclipticLongitude )
 import qualified Data.Sequence as S
 import Data.Sequence (ViewR(EmptyR, (:>)), ViewL (EmptyL, (:<)), (<|), (|>), (><))
 import qualified Data.Map as M
+import Data.Time (UTCTime)
 
 -------------------------------------------------------------------------------
 -- SPECIALIZED CONTAINTERS
@@ -27,6 +28,10 @@ import qualified Data.Map as M
 -- Produce a third value that replaces either or both? See 'MergeStrategy'.
 class Merge a where
   merge :: a -> a -> MergeStrategy a
+  
+class IsEclipticBand a where
+  eclipticStart :: a -> Double
+  eclipticEnd :: a -> Double
 
 data MergeStrategy a
   = ReplaceBoth a a
@@ -48,6 +53,7 @@ instance Functor MergeStrategy where
 newtype MergeSeq a =
   MergeSeq {getMerged :: S.Seq a}
   deriving stock (Show)
+  deriving newtype Eq
   deriving Foldable via S.Seq
 
 singleton :: a -> MergeSeq a
@@ -104,8 +110,18 @@ data Event
   | HouseTransit     (Transit House)
   | LunarPhase       LunarPhaseInfo
   | Eclipse          EclipseInfo
+  deriving (Eq, Show)
 
 type EventSeq = MergeSeq Event
+
+-- | Events that travel with their moments of exactitude
+-- (stored as a separate datum since they usually require
+-- further trips through IO beyond just traversing an ephemeris.)
+data ExactEvent = 
+  ExactEvent {
+    evt :: Event,
+    exactitudeMoments :: [UTCTime]
+  } deriving (Eq, Show)
 
 -- | Alias for readability
 getEvents :: EventSeq -> S.Seq Event
@@ -180,11 +196,15 @@ instance Eq a => Merge (Crossing a) where
       }
 
 data Zodiac = Zodiac
-  { signName :: ZodiacSignName, signLng :: Double}
+  { signName :: ZodiacSignName, signStart :: Double, signEnd :: Double }
   deriving (Eq, Show)
 
 instance HasEclipticLongitude Zodiac where
-  getEclipticLongitude (Zodiac _ l) = l
+  getEclipticLongitude (Zodiac _ l _) = l
+  
+instance IsEclipticBand Zodiac where
+  eclipticStart = signStart
+  eclipticEnd = signEnd
 
 data HouseName
   = I
@@ -202,11 +222,15 @@ data HouseName
   deriving (Eq, Show, Enum, Ord)
 
 data House = House
-  { houseName :: HouseName, houseCusp :: Double }
+  { houseName :: HouseName, houseCusp :: Double, houseEnd :: Double }
   deriving (Eq, Show)
   
 instance HasEclipticLongitude House where
   getEclipticLongitude = houseCusp
+  
+instance IsEclipticBand House where
+  eclipticStart = houseCusp
+  eclipticEnd = houseEnd
 
 instance Ord House where
   a `compare` b = compare (houseCusp a) (houseCusp b)
@@ -271,7 +295,7 @@ data Transit over = Transit {
 , transitPhases :: !(MergeSeq TransitPhase)
 , transitIsExact :: ![JulianDayTT]
 , transitCrosses :: !EclipticLongitude
-} deriving (Show)
+} deriving (Eq, Show)
 
 instance Eq a => Merge (Transit a) where
   x `merge` y =

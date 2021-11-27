@@ -15,20 +15,20 @@ import Almanac.Event.Types
 
 -- | Given ephemeris for two consecutive days, determine if a planet has changed
 -- direction, or entered a stationary phase.
-getRetrogrades :: Seq (Ephemeris Double) -> Grouped Planet Event
-getRetrogrades (pos1 :<| pos2 :<| _) =
+getRetrogrades :: [Planet] -> Seq (Ephemeris Double) -> Grouped Planet Event
+getRetrogrades chosenPlanets (pos1 :<| pos2 :<| _) =
   concatForEach (zip (toList $ ephePositions pos1) (toList $ ephePositions pos2)) $ \(p1, p2) ->
     case mkStation (epheDate pos1, p1) (epheDate pos2, p2) of
      Nothing -> mempty
      Just st -> 
        -- the MeanNode /appears/ direct/retrograde sometimes,
        -- but that's not astrologically significant.
-       if ephePlanet p1 `elem` [MeanNode, TrueNode] then
-         mempty
-       else
+       if ephePlanet p1 `elem` chosenPlanets then
          Aggregate $ M.fromList [(ephePlanet p1, singleton (DirectionChange st))]
+       else
+         mempty
 
-getRetrogrades _ = mempty
+getRetrogrades _ _ = mempty
 
 
 isStationary :: ViewL PlanetStation -> Bool
