@@ -4,6 +4,9 @@ module AlmanacSpec (spec) where
 import Test.Hspec
 import Almanac
 import Almanac.Extras
+import Almanac.Optics
+import Lens.Micro
+
 import SwissEphemeris
     ( GeographicPosition(GeographicPosition, geoLat, geoLng),
       LunarPhaseName(LastQuarter, WaningCrescent, NewMoon,
@@ -27,6 +30,7 @@ import SpecUtils
       extractMoonPhaseInfo,
       genericEventInfo,
       mkUTC )
+import Data.Maybe (catMaybes)
 
 start2021, end2021 :: UTCTime
 start2021 = UTCTime (fromGregorian 2021 1 1) 0
@@ -38,7 +42,7 @@ spec = beforeAll_ epheWithFallback $ do
   describe "runQuery" $ do
     context "QueryDirectionChange" $ do
       it "finds all the changes of direction for Mercury in 2021" $ do
-        let q = mundane  
+        let q = mundane
                   (Interval start2021 end2021)
                   [QueryDirectionChange [Mercury]]
             expectedStations =
@@ -51,12 +55,26 @@ spec = beforeAll_ epheWithFallback $ do
                 (Direct,"2021-10-18T15:16:50.452575981616Z")
               ] & map (second mkUTC)
         exactEvents <- runQuery q >>= eventsWithExactitude
-        let digest = extractStationInfo exactEvents
+        let summarize evt =
+              let stationT  = evt ^? _Event._DirectionChangeInfo.stationTypeL
+                  firstExact = evt ^? _Exactitudes._head
+              in case (stationT, firstExact) of
+                (Just station, Just firstE) -> 
+                  if station `elem` ([Direct, Retrograde] :: [Station] ) then
+                    Just (station, firstE)
+                  else
+                    Nothing
+                _ -> Nothing
+            digest = 
+              exactEvents 
+              & fmap summarize
+              & toList
+              & catMaybes
         toList digest `shouldBe` expectedStations
 
     context "QueryZodiacIngress" $ do
       it "finds all ingresses in 2021" $ do
-        let q = mundane 
+        let q = mundane
                   (Interval start2021 end2021)
                   [QueryZodiacIngress [Mars, Jupiter, Saturn, Chiron, Uranus, Neptune, Pluto]]
             expectedCrossings =
@@ -84,7 +102,7 @@ spec = beforeAll_ epheWithFallback $ do
             q = mundane
                   (Interval nov2021 dec2021)
                   [QueryLunarPhase]
-            expectedPhases = 
+            expectedPhases =
               [
                 (WaningCrescent,"2021-11-01T13:28:27.314121723175Z"),
                 (NewMoon,"2021-11-04T21:14:36.684200763702Z"),
@@ -127,7 +145,7 @@ spec = beforeAll_ epheWithFallback $ do
                     QueryEclipse,
                     QueryLunarPhase
                   ]
-            expectedEvents = 
+            expectedEvents =
               [
                 ("Mercury goes Direct","2021-10-18T15:16:50.452575981616Z"),
                 ("Mars enters Scorpio (DirectMotion)","2021-10-30T14:21:06.681294143199Z"),
@@ -137,18 +155,18 @@ spec = beforeAll_ epheWithFallback $ do
                 ("FullMoon","2021-11-19T08:57:27.984892129898Z"),
                 ("Lunar Eclipse (PartialLunarEclipse)","2021-11-19T09:02:55.849740207195Z")
               ] & map (second (pure . mkUTC))
-        exactEvents <- runQuery q >>= eventsWithExactitude 
+        exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = genericEventInfo exactEvents
         digest `shouldBe` expectedEvents
 
     context "Composite natal query" $ do
       it "finds all events for an interval, for a reference event" $ do
         let gestern = UTCTime (fromGregorian 2021 11 25) 0
-            morgen  = UTCTime (fromGregorian 2021 11 27) 0 
+            morgen  = UTCTime (fromGregorian 2021 11 27) 0
             q = natal
                   (Interval gestern morgen)
-                  (ReferenceEvent 
-                    (mkUTC "1989-01-07T05:30:00Z") 
+                  (ReferenceEvent
+                    (mkUTC "1989-01-07T05:30:00Z")
                     (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ))
                   [
                     QueryHouseIngress [Moon],
@@ -169,6 +187,6 @@ spec = beforeAll_ epheWithFallback $ do
                 ("Moon Square Pluto","2021-11-25T20:53:55.02881526947Z"),
                 ("Moon Sextile I","2021-11-25T15:09:36.979006826877Z")
               ] & map (second (pure . mkUTC))
-        exactEvents <- runQuery q >>= eventsWithExactitude 
+        exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = genericEventInfo $ S.filter hasExactitude exactEvents
         digest `shouldBe` expectedEvents

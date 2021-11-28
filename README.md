@@ -4,10 +4,10 @@ Utilities for processing pre-calculated Ephemeris data (
 see [swiss-ephemeris](https://github.com/lfborjas/swiss-ephemeris).) 
 Given an interval and a set of queries, it will efficiently traverse ephemeris in daily
 increments (plus more direct interpolation for the Moon, since daily
-traversal is too coarse for its average speed,) and return a `Seq` (from `containers`)
+traversal is too coarse for its average speed,) and return a [`Seq`](https://hackage.haskell.org/package/containers)
 of `Events`. One can then choose to inspect the extracted events to calculate when _exactly_
-they happen (this is recommended as an extra step, only on demand, since exactitude calculation
-needs to do some numerical interpolation, vs. simple fast daily perusal.)
+they happen -- this is recommended as an extra step, only on demand, since exactitude calculation
+needs to do some numerical interpolation, vs. simple fast daily perusal.
 
 This library was incubated in my 
 [laboratorium](https://natal-chart/laboratorium), with some further refinements.
@@ -17,7 +17,8 @@ above, for info on where to find them;) you'll also need _precalculated_ ephemer
 are not officially distributed by astro.com, but I've put a couple of centuries of precalculated
 ephemeris in this project's `test/ephe/` directory (they're _tiny_ files.) Functions to generate
 precalculated ephemeris are also [provided by `swiss-ephemeris`](https://hackage.haskell.org/package/swiss-ephemeris-1.4.0.0/docs/SwissEphemeris-Precalculated.html#g:9), here's some example usage
-[from `laboratorium`](https://github.com/natal-chart/laboratorium/blob/56bb1be81dc8ce0b7f5ee44f0b0d269f50ef59a2/src/PrecalculatedEphemeris.hs#L19-L31)
+[from `laboratorium`](https://github.com/natal-chart/laboratorium/blob/56bb1be81dc8ce0b7f5ee44f0b0d269f50ef59a2/src/PrecalculatedEphemeris.hs#L19-L31), which can be run
+as a CLI.
 
 With those in place, here's some example usage (taken from the `test`s themselves):
 

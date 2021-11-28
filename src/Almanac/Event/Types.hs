@@ -119,7 +119,7 @@ type EventSeq = MergeSeq Event
 -- further trips through IO beyond just traversing an ephemeris.)
 data ExactEvent = 
   ExactEvent {
-    evt :: Event,
+    event :: Event,
     exactitudeMoments :: [UTCTime]
   } deriving (Eq, Show)
 
