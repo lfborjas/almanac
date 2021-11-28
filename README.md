@@ -1,10 +1,8 @@
 # Almanac
 
-Utilities for processing pre-calculated Ephemeris data (
-see [swiss-ephemeris](https://github.com/lfborjas/swiss-ephemeris).) 
-Given an interval and a set of queries, it will efficiently traverse ephemeris in daily
-increments (plus more direct interpolation for the Moon, since daily
-traversal is too coarse for its average speed,) and return a [`Seq`](https://hackage.haskell.org/package/containers)
+Utilities for processing pre-calculated Ephemeris data (see [swiss-ephemeris](https://github.com/lfborjas/swiss-ephemeris).) 
+Given an interval and a set of queries, it will efficiently traverse precalculated ephemeris in daily
+increments, or do faster interpolation of ephemeris data for certain queries like moon events and eclipses, and return a [`Seq`](https://hackage.haskell.org/package/containers)
 of `Events`. One can then choose to inspect the extracted events to calculate when _exactly_
 they happen -- this is recommended as an extra step, only on demand, since exactitude calculation
 needs to do some numerical interpolation, vs. simple fast daily perusal.
@@ -14,14 +12,13 @@ provided in the `Almanac.Optics` module to help in the otherwise tiresome deep p
 Note that there's **no dependency** on any actual `lens`-like library, so you'll have to bring your own to actually do "lens stuff" with the provided optics. To illustrate how the provided optics can be brought to life with a lens library, the tests use `microlens`.
 
 
-To use library, you'll have to get ahold of ephemeris files (see my `swiss-ephemeris`, linked
-above, for info on where to find them;) you'll also need _precalculated_ ephemeris, which
-are not officially distributed by astro.com, but I've put a couple of centuries of precalculated
+To use this library, you'll have to [get ahold of ephemeris files](https://github.com/lfborjas/swiss-ephemeris#ephemerides-files); 
+you'll also need _precalculated_ ephemeris, which are not officially distributed by astro.com, but I've put a couple of centuries of precalculated
 ephemeris in this project's `test/ephe/` directory that you can just copy (they're _tiny_ files.) Functions to generate
 precalculated ephemeris are also [provided by `swiss-ephemeris`](https://hackage.haskell.org/package/swiss-ephemeris-1.4.0.0/docs/SwissEphemeris-Precalculated.html#g:9), here's some example usage
 [from `laboratorium`](https://github.com/natal-chart/laboratorium/blob/56bb1be81dc8ce0b7f5ee44f0b0d269f50ef59a2/src/PrecalculatedEphemeris.hs#L19-L31), which can be run as a CLI.
 
-With those in place, here's some example usage (taken from the `test`s themselves):
+With those in place, here's some example usage:
 
 ```haskell
 import Almanac
@@ -66,7 +63,7 @@ main :: IO ()
   -- location of precalculated ephe
   setEphe4Path fullEphePath
 
-  print lunarPhasesAndEclipses
+  lunarPhasesAndEclipses >>= print
   
 {- 
   Would print something like 
