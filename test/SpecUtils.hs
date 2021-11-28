@@ -23,33 +23,6 @@ epheWithFallback = do
   -- location of precalculated ephe
   setEphe4Path fullEphePath
 
-extractStationInfo :: Seq ExactEvent -> [(Station, UTCTime)]
-extractStationInfo evts =
-  fmap summarize evts & toList & catMaybes
-  where
-    summarize (ExactEvent (DirectionChange PlanetStation{stationType}) (firstExact:_)) =
-      if stationType `elem` ([Direct, Retrograde] :: [Station]) then
-        Just (stationType, firstExact)
-      else
-        Nothing
-    summarize _ = Nothing
-
-extractCrossingInfo :: Seq ExactEvent -> [(Planet, PlanetMotion, ZodiacSignName, UTCTime)]
-extractCrossingInfo evts =
-  fmap summarize evts & toList & catMaybes
-  where
-    summarize (ExactEvent (ZodiacIngress (Crossing _s _e Zodiac{signName} planet motion)) (firstExact:_)) =
-      Just (planet, motion, signName, firstExact)
-    summarize _ = Nothing
-
-extractMoonPhaseInfo :: Seq ExactEvent -> [(LunarPhaseName, UTCTime)]
-extractMoonPhaseInfo evts =
-  fmap summarize evts & toList & catMaybes
-  where
-    summarize (ExactEvent (LunarPhase LunarPhaseInfo{lunarPhaseName}) (firstExact:_)) =
-      Just (lunarPhaseName, firstExact)
-    summarize _ = Nothing
-    
 -- | Ugly function to "pretty print" events
 genericEventInfo :: Seq ExactEvent ->  [(String, [UTCTime])]
 genericEventInfo evts =
