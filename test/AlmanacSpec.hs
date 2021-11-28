@@ -4,8 +4,25 @@ module AlmanacSpec (spec) where
 import Test.Hspec
 import Almanac
 import Almanac.Extras
+    ( allCuspPairs,
+      allPairs,
+      defaultPlanets,
+      filteredPairs,
+      hasExactitude )
 import Almanac.Optics
+    ( stationTypeL,
+      _DirectionChangeInfo,
+      _Event,
+      _Exactitudes,
+      crossingCrossesL,
+      crossingPlanetL,
+      crossingDirectionL,
+      signNameL,
+      lunarPhaseNameL,
+      _ZodiacIngressInfo,
+      _LunarPhaseInfo)
 import Lens.Micro
+    ( (&), (^..), (^?), _Just, _head, filtered, traversed )
 
 import SwissEphemeris
     ( GeographicPosition(GeographicPosition, geoLat, geoLng),
@@ -19,18 +36,14 @@ import SwissEphemeris
              Neptune, Pluto) )
 import Data.Time ( fromGregorian, UTCTime(UTCTime) )
 import Data.Foldable (toList)
-import Data.Function
 import Data.Bifunctor (second)
 import Data.List.NonEmpty (fromList)
 import qualified Data.Sequence as S
 import SpecUtils
     ( epheWithFallback,
-      extractStationInfo,
-      extractCrossingInfo,
-      extractMoonPhaseInfo,
       genericEventInfo,
       mkUTC )
-import Data.Maybe (catMaybes)
+import Lens.Micro.Extras (view)
 
 start2021, end2021 :: UTCTime
 start2021 = UTCTime (fromGregorian 2021 1 1) 0
@@ -55,21 +68,13 @@ spec = beforeAll_ epheWithFallback $ do
                 (Direct,"2021-10-18T15:16:50.452575981616Z")
               ] & map (second mkUTC)
         exactEvents <- runQuery q >>= eventsWithExactitude
-        let summarize evt =
-              let stationT  = evt ^? _Event._DirectionChangeInfo.stationTypeL
+        let digest = (summarize <$> exactEvents) ^.. traversed . _Just
+            summarize evt =
+              let stationT  = evt ^? _Event._DirectionChangeInfo.stationTypeL.filtered isChange
+                  isChange = (`elem` ([Direct, Retrograde] :: [Station]))
                   firstExact = evt ^? _Exactitudes._head
-              in case (stationT, firstExact) of
-                (Just station, Just firstE) -> 
-                  if station `elem` ([Direct, Retrograde] :: [Station] ) then
-                    Just (station, firstE)
-                  else
-                    Nothing
-                _ -> Nothing
-            digest = 
-              exactEvents 
-              & fmap summarize
-              & toList
-              & catMaybes
+              in  (,) <$> stationT <*> firstExact
+            
         toList digest `shouldBe` expectedStations
 
     context "QueryZodiacIngress" $ do
@@ -92,7 +97,21 @@ spec = beforeAll_ epheWithFallback $ do
                 (Jupiter, DirectMotion, Pisces,"2021-12-29T04:09:37.511599659919Z")
               ] & map (second mkUTC)
         exactEvents <- runQuery q >>= eventsWithExactitude
-        let digest = extractCrossingInfo exactEvents
+        let digest = (summarize <$> exactEvents) ^.. traversed . _Just
+            summarize evt =
+              let ingress    = evt ^? _Event._ZodiacIngressInfo
+                  firstExact = evt ^? _Exactitudes._head
+                  ingressingPlanet =
+                    view crossingPlanetL    <$> ingress
+                  ingressingMotion =
+                    view crossingDirectionL <$> ingress
+                  ingressed =
+                    (view (crossingCrossesL.signNameL) <$> ingress)
+              in
+                (,,,) <$> ingressingPlanet
+                      <*> ingressingMotion
+                      <*> ingressed
+                      <*> firstExact
         digest `shouldBe` expectedCrossings
 
     context "QueryLunarPhase" $ do
@@ -114,7 +133,11 @@ spec = beforeAll_ epheWithFallback $ do
                 (LastQuarter,"2021-11-27T12:27:40.648325085639Z")
               ] & map (second mkUTC)
         exactPhases <- runQuery q >>= eventsWithExactitude
-        let digest = extractMoonPhaseInfo exactPhases
+        let digest = (summarize <$> exactPhases) ^.. traversed . _Just
+            summarize evt =
+              let phase      = evt ^? _Event._LunarPhaseInfo.lunarPhaseNameL
+                  firstExact = evt ^? _Exactitudes._head
+              in (,) <$> phase <*> firstExact
         digest `shouldBe` expectedPhases
 
     context "QueryEclipse" $ do
