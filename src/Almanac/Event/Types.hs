@@ -253,11 +253,19 @@ data TransitPhaseName
   deriving (Eq, Show)
 
 data AspectName
-  = Sextile
+  = Conjunction
+  | Sextile
   | Square
   | Trine
   | Opposition
-  | Conjunction
+  | Quincunx
+  | SemiSextile
+  | Quintile
+  | BiQuintile
+  | Septile
+  | SemiSquare
+  | Novile
+  | Sesquisquare -- Trioctile
   deriving (Eq, Enum, Show)
 
 data Aspect = Aspect {

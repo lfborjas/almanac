@@ -27,50 +27,50 @@ import Almanac.Event.PlanetStation
 
 type EphemerisPoint = (JulianDayTT, EphemerisPosition Double)
 
-getTransits :: [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
-getTransits chosenPairs (day1Ephe :<| day2Ephe :<| _) =
+getTransits :: [Aspect] -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
+getTransits chosenAspects chosenPairs (day1Ephe :<| day2Ephe :<| _) =
   concatForEach chosenPairs $ \pair@(planet1, planet2) ->
       let planet1Ephe1 = (epheDate day1Ephe,) <$> planetEphe planet1 day1Ephe
           planet1Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet1 day2Ephe
           planet2Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet2 day2Ephe
           planet1Ephes = liftA2 (,) planet1Ephe1 planet1Ephe2
-          transit' = join $ mkTransit ephePlanet <$> planet1Ephes <*> planet2Ephe2
+          transit' = join $ mkTransit chosenAspects ephePlanet <$> planet1Ephes <*> planet2Ephe2
       in case transit' of
         Nothing -> mempty
         Just transit -> Aggregate $ M.fromList [(pair, singleton $ PlanetaryTransit transit)]
 
-getTransits _ _ = mempty
+getTransits _ _ _ = mempty
 
 
-getNatalTransits :: Ephemeris Double -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
-getNatalTransits natalEphemeris chosenPairs (day1Ephe :<| day2Ephe :<| _) =
+getNatalTransits :: Ephemeris Double -> [Aspect] -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
+getNatalTransits natalEphemeris chosenAspects chosenPairs (day1Ephe :<| day2Ephe :<| _) =
   concatForEach chosenPairs $ \pair@(planet1, planet2) ->
       let planet1Ephe1 = (epheDate day1Ephe,) <$> planetEphe planet1 day1Ephe
           planet1Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet1 day2Ephe
 
           planet2Ephe2 = (epheDate day2Ephe,) <$> staticPosition (planetEphe planet2 natalEphemeris)
           planet1Ephes = liftA2 (,) planet1Ephe1 planet1Ephe2
-          transit' = join $ mkTransit ephePlanet <$> planet1Ephes <*> planet2Ephe2
+          transit' = join $ mkTransit chosenAspects ephePlanet <$> planet1Ephes <*> planet2Ephe2
       in case transit' of
         Nothing -> mempty
         Just transit -> Aggregate $ M.fromList [(pair, singleton $ PlanetaryTransit transit)]
 
-getNatalTransits _ _ _ = mempty
+getNatalTransits _ _ _ _ = mempty
 
-getCuspTransits :: [House] -> [Planet] -> Seq (Ephemeris Double) -> Grouped (Planet, House) Event
-getCuspTransits cusps chosenPlanets (day1Ephe :<| day2Ephe :<| _) =
+getCuspTransits :: [House] -> [Aspect] -> [Planet] -> Seq (Ephemeris Double) -> Grouped (Planet, House) Event
+getCuspTransits cusps chosenAspects chosenPlanets (day1Ephe :<| day2Ephe :<| _) =
   concatForEach (cProduct chosenPlanets cusps )$ \pair@(planet1, cusp) ->
       let planet1Ephe1 = (epheDate day1Ephe,) <$> planetEphe planet1 day1Ephe
           planet1Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet1 day2Ephe
 
           planet2Ephe2 = Just (epheDate day2Ephe,cusp)
           planet1Ephes = liftA2 (,) planet1Ephe1 planet1Ephe2
-          transit' = join $ mkTransit id <$> planet1Ephes <*> planet2Ephe2
+          transit' = join $ mkTransit chosenAspects id <$> planet1Ephes <*> planet2Ephe2
       in case transit' of
         Nothing -> mempty
         Just transit -> Aggregate $ M.fromList [(pair, singleton $ HouseTransit transit)]
 
-getCuspTransits _ _ _ = mempty
+getCuspTransits _ _ _ _ = mempty
 
 cProduct :: [Planet] -> [a] -> [(Planet, a)]
 cProduct ps as = [(p,a) | p <- ps, a <- as]
@@ -79,31 +79,20 @@ staticPosition :: Maybe (EphemerisPosition Double) -> Maybe (EphemerisPosition D
 staticPosition (Just pos) = Just $ pos{epheSpeed = 0.0}
 staticPosition Nothing = Nothing
 
-sextile, square, trine, opposition, conjunction :: Aspect
-conjunction = Aspect Conjunction 0 5 5
-sextile = Aspect Sextile 60 5 5
-square = Aspect Square 90 5 5
-trine = Aspect Trine 120 5 5
-opposition = Aspect Opposition 180 5 5
-
--- | Aspects to consider, arranged in a "cycle":
--- as soon as one is determined, no need to seek the others.
-aspects :: [Aspect]
-aspects = [conjunction, sextile, square, trine, opposition]
-
 
 mkTransit
   :: HasEclipticLongitude a
-  =>  (a -> b)
+  => [Aspect] 
+  -> (a -> b)
   -> (EphemerisPoint, EphemerisPoint)
   -- ^ planet 1 at days 1->2
   -> (JulianDayTT, a)
   -- ^ planet 2 at day 2
   -> Maybe (Transit b)
-mkTransit ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
+mkTransit chosenAspects ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
   = do
     let (before, after, transitedPos) = (epheLongitude p11, epheLongitude p12, getEclipticLongitude p22)
-    (aspectName, angle', orb', meets) <- determineAspect after transitedPos
+    (aspectName, angle', orb', meets) <- determineAspect chosenAspects after transitedPos
     -- TODO(luis) use diffdeg2n:
     -- https://github.com/lfborjas/swiss-ephemeris/blob/7edfb51ed12b301ffb44811c472f864a49cc7f16/csrc/swephlib.c#L3824 
     let (before', after', ref) = normalize (before, after, getEclipticLongitude meets)
@@ -178,12 +167,12 @@ transitPhase StationaryRetrograde Crossed = TriggeredRetrograde
 transitPhase Retrograde Below = SeparatingRetrograde
 transitPhase StationaryRetrograde Below = SeparatingRetrograde
 
-determineAspect :: Double -> Double -> Maybe (AspectName, Double, Double, EclipticLongitude)
-determineAspect p1 p2 =
-  headMaybe $ aspectCycle (EclipticLongitude p1) (EclipticLongitude p2)
+determineAspect :: [Aspect] -> Double -> Double -> Maybe (AspectName, Double, Double, EclipticLongitude)
+determineAspect aspects p1 p2 =
+  headMaybe $ aspectCycle aspects (EclipticLongitude p1) (EclipticLongitude p2)
 
-aspectCycle :: EclipticLongitude -> EclipticLongitude -> [(AspectName, Double, Double, EclipticLongitude)]
-aspectCycle p1 p2 = do
+aspectCycle :: [Aspect] -> EclipticLongitude -> EclipticLongitude -> [(AspectName, Double, Double, EclipticLongitude)]
+aspectCycle aspects p1 p2 = do
   asp <- aspects
   let dist = p1 <-> p2
       theta = angle asp
@@ -217,14 +206,14 @@ normalize points@(p1, p2, ref)
   where
     translate = (+90)
 
-selectLunarTransits :: JulianDayTT -> JulianDayTT -> Ephemeris Double -> [Planet] -> IO (Grouped (Planet, Planet) Event)
-selectLunarTransits start end natalEphemeris chosenPlanets =
+selectLunarTransits :: [Aspect] -> JulianDayTT -> JulianDayTT -> Ephemeris Double -> [Planet] -> IO (Grouped (Planet, Planet) Event)
+selectLunarTransits chosenAspects start end natalEphemeris chosenPlanets =
   foldMap' mkLunarTransit (ephePositions natalEphemeris)
   where
     mkLunarTransit :: EphemerisPosition Double -> IO (Grouped (Planet, Planet) Event)
     mkLunarTransit pos = do
       if ephePlanet pos `elem` chosenPlanets then do
-        transit <- lunarAspects ephePlanet start end pos --(EclipticLongitude . epheLongitude $ pos)
+        transit <- lunarAspects chosenAspects ephePlanet start end pos --(EclipticLongitude . epheLongitude $ pos)
         if null transit then
           mempty
         else
@@ -232,13 +221,13 @@ selectLunarTransits start end natalEphemeris chosenPlanets =
       else
         mempty
 
-selectLunarCuspTransits :: JulianDayTT -> JulianDayTT -> [House]-> IO (Grouped (Planet, House) Event)
-selectLunarCuspTransits start end =
+selectLunarCuspTransits :: [Aspect] -> JulianDayTT -> JulianDayTT -> [House]-> IO (Grouped (Planet, House) Event)
+selectLunarCuspTransits chosenAspects start end =
   foldMap' mkLunarTransit
   where
     mkLunarTransit :: House -> IO (Grouped (Planet, House) Event)
     mkLunarTransit pos = do
-      transit <- lunarAspects id start end pos
+      transit <- lunarAspects chosenAspects id start end pos
       if null transit then
         mempty
       else
@@ -247,13 +236,14 @@ selectLunarCuspTransits start end =
 
 lunarAspects
   :: HasEclipticLongitude a
-  => (a -> b)
+  => [Aspect]
+  -> (a -> b)
   -> JulianDayTT
   -> JulianDayTT
   -> a
   -> IO [Transit b]
-lunarAspects ins start end pos =
-  foldMap' crossings aspects
+lunarAspects chosenAspects ins start end pos =
+  foldMap' crossings chosenAspects
   where
     crossings Aspect{aspectName, angle} = do
       let crossA = toEclipticLongitude pos + EclipticLongitude angle

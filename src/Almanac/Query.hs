@@ -60,7 +60,7 @@ newtype NonComposable q = NonComposable q
 data MundaneQuery
   = QueryDirectionChange (NonEmpty Planet)
   | QueryZodiacIngress   (NonEmpty Planet)
-  | QueryPlanetaryMundaneTransit (NonEmpty (Planet, Planet))
+  | QueryPlanetaryMundaneTransit (NonEmpty Aspect) (NonEmpty (Planet, Planet))
   | QueryLunarPhase
   | QueryEclipse
   deriving (Eq, Show)
@@ -71,15 +71,15 @@ instance QueryStrategy MundaneQuery where
 
 data NatalQuery
   = QueryHouseIngress    (NonEmpty Planet)
-  | QueryPlanetaryNatalTransit (NonEmpty (Planet, Planet))
-  | QueryCuspTransit  (NonEmpty (Planet, HouseName))
-  | QueryLunarNatalTransit (NonEmpty Planet)
-  | QueryLunarCuspTransit  (NonEmpty HouseName)
+  | QueryPlanetaryNatalTransit (NonEmpty Aspect) (NonEmpty (Planet, Planet))
+  | QueryCuspTransit  (NonEmpty Aspect) (NonEmpty (Planet, HouseName))
+  | QueryLunarNatalTransit (NonEmpty Aspect) (NonEmpty Planet)
+  | QueryLunarCuspTransit  (NonEmpty Aspect) (NonEmpty HouseName)
   deriving (Eq, Show)
 
 instance QueryStrategy NatalQuery where
-  classifyQuery q@(QueryLunarNatalTransit _) = Left . NonComposable $ q
-  classifyQuery q@(QueryLunarCuspTransit _) = Left . NonComposable $ q
+  classifyQuery q@(QueryLunarNatalTransit _ _) = Left . NonComposable $ q
+  classifyQuery q@(QueryLunarCuspTransit _ _) = Left . NonComposable $ q
   classifyQuery q = Right . Composable $ q
 
 data Interval =
@@ -188,8 +188,8 @@ toFoldMundane (Composable q) =
       L.foldMap (getRetrogrades (toList planets)) collapse
     (QueryZodiacIngress planets)  ->
       L.foldMap (getZodiacCrossings (toList planets) westernZodiacSigns) collapse
-    (QueryPlanetaryMundaneTransit pairs) ->
-      L.foldMap (getTransits (toList pairs)) collapse
+    (QueryPlanetaryMundaneTransit chosenAspects pairs) ->
+      L.foldMap (getTransits (toList chosenAspects) (toList pairs)) collapse
     QueryLunarPhase ->
       L.foldMap mapLunarPhases getMerged
     -- All other queries are meant to be executed directly, without constructing a Fold.
@@ -212,29 +212,29 @@ toFoldNatal ephe houses (Composable q) =
   case q of
     (QueryHouseIngress planets) ->
       L.foldMap (getHouseCrossings (toList planets) houses) collapse
-    (QueryPlanetaryNatalTransit pairs) ->
-      L.foldMap (getNatalTransits ephe (toList pairs)) collapse
-    (QueryCuspTransit pairs) ->
+    (QueryPlanetaryNatalTransit chosenAspects pairs) ->
+      L.foldMap (getNatalTransits ephe (toList chosenAspects) (toList pairs)) collapse
+    (QueryCuspTransit chosenAspects pairs) ->
       let pairList = toList pairs
           chosenPlanets = map fst pairList
           chosenHouseNames  = nub $ map snd pairList
           chosenHouses = houses & filter (houseName >>> (`elem` chosenHouseNames))
-      in L.foldMap (getCuspTransits chosenHouses chosenPlanets) collapse
+      in L.foldMap (getCuspTransits chosenHouses (toList chosenAspects) chosenPlanets) collapse
     _ -> mempty
 
 execNatal :: Interval -> Ephemeris Double -> [House] -> NonComposable NatalQuery -> IO (Seq Event)
 execNatal Interval{start,end} ephe houses (NonComposable q) =
   case q of
-    (QueryLunarNatalTransit planets) -> do
+    (QueryLunarNatalTransit chosenAspects planets) -> do
       Just ttStart <- toJulianDay start
       Just ttEnd   <- toJulianDay end
-      lun <- selectLunarTransits ttStart ttEnd ephe (toList planets)
+      lun <- selectLunarTransits (toList chosenAspects) ttStart ttEnd ephe (toList planets)
       pure $ collapse lun
-    (QueryLunarCuspTransit houseNames) -> do
+    (QueryLunarCuspTransit chosenAspects houseNames) -> do
       Just ttStart <- toJulianDay start
       Just ttEnd   <- toJulianDay end
       let chosenHouses = houses & filter (houseName >>> (`elem` houseNames))
-      lunCusps <- selectLunarCuspTransits ttStart ttEnd chosenHouses
+      lunCusps <- selectLunarCuspTransits (toList chosenAspects) ttStart ttEnd chosenHouses
       pure $ collapse lunCusps
     _ -> pure mempty
 

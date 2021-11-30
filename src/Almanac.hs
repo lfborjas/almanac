@@ -1,16 +1,19 @@
 module Almanac (
   -- * Event Types
   Event(..),
+  ExactEvent(..),
   PlanetStation(..),
   LunarPhaseInfo(..),
   EclipseInfo(..),
   Transit(..),
   Crossing(..),
+  -- ** Information within events
   Station(..),
   Zodiac(..),
   House(..),
   HouseName(..),
-  ExactEvent(..),
+  Aspect(..),
+  AspectName(..),
   -- * Event queries
   module Almanac.Query,
   -- * Event handling and processing
