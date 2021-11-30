@@ -12,15 +12,15 @@ import Almanac.Extras
 import Almanac.Optics
     ( stationTypeL,
       _DirectionChangeInfo,
-      _Event,
-      _Exactitudes,
+      eventL,
+      exactitudeMomentsL,
       crossingCrossesL,
       crossingPlanetL,
       crossingDirectionL,
       signNameL,
       lunarPhaseNameL,
       _ZodiacIngressInfo,
-      _LunarPhaseInfo)
+      _LunarPhaseInfo, eventL)
 import Lens.Micro
     ( (&), (^..), (^?), _Just, _head, filtered, traversed )
 
@@ -70,9 +70,9 @@ spec = beforeAll_ epheWithFallback $ do
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = (summarize <$> exactEvents) ^.. traversed . _Just
             summarize evt =
-              let stationT  = evt ^? _Event._DirectionChangeInfo.stationTypeL.filtered isChange
+              let stationT  = evt ^? eventL._DirectionChangeInfo.stationTypeL.filtered isChange
                   isChange = (`elem` ([Direct, Retrograde] :: [Station]))
-                  firstExact = evt ^? _Exactitudes._head
+                  firstExact = evt ^? exactitudeMomentsL._head
               in  (,) <$> stationT <*> firstExact
             
         toList digest `shouldBe` expectedStations
@@ -99,8 +99,8 @@ spec = beforeAll_ epheWithFallback $ do
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = (summarize <$> exactEvents) ^.. traversed . _Just
             summarize evt =
-              let ingress    = evt ^? _Event._ZodiacIngressInfo
-                  firstExact = evt ^? _Exactitudes._head
+              let ingress    = evt ^? eventL._ZodiacIngressInfo
+                  firstExact = evt ^? exactitudeMomentsL._head
                   ingressingPlanet =
                     view crossingPlanetL    <$> ingress
                   ingressingMotion =
@@ -135,8 +135,8 @@ spec = beforeAll_ epheWithFallback $ do
         exactPhases <- runQuery q >>= eventsWithExactitude
         let digest = (summarize <$> exactPhases) ^.. traversed . _Just
             summarize evt =
-              let phase      = evt ^? _Event._LunarPhaseInfo.lunarPhaseNameL
-                  firstExact = evt ^? _Exactitudes._head
+              let phase      = evt ^? eventL._LunarPhaseInfo.lunarPhaseNameL
+                  firstExact = evt ^? exactitudeMomentsL._head
               in (,) <$> phase <*> firstExact
         digest `shouldBe` expectedPhases
 

@@ -129,20 +129,7 @@ houseEndL =
     get = houseEnd
     set z e' = z{houseEnd = e'}
 
--------------------------------------------------------------------------------
--- Traversals for 'Crossing'
--------------------------------------------------------------------------------
-
-_CrossedZodiac :: Traversal' (Crossing Zodiac) Zodiac
-_CrossedZodiac = traverseCrossing
-
-_CrossedHouse :: Traversal' (Crossing House) House
-_CrossedHouse = traverseCrossing
-
-traverseCrossing :: Traversal' (Crossing a) a
-traverseCrossing f (Crossing start end crosses planet direction)
-  = Crossing start end <$> f crosses <*> pure planet <*> pure direction
-  
+ 
  
 -------------------------------------------------------------------------------
 -- Lenses for Transit
@@ -240,27 +227,6 @@ phaseEndsL =
     set p at' = p{phaseEnds = at'} 
 
 -------------------------------------------------------------------------------
--- Traversals for 'Transit'
--------------------------------------------------------------------------------
-
-_TransitedPlanet :: Traversal' (Transit Planet) Planet
-_TransitedPlanet = traverseTransit
-
-_TransitedHouse :: Traversal' (Transit House) House
-_TransitedHouse = traverseTransit
-
-traverseTransit :: Traversal' (Transit over) over
-traverseTransit f (Transit aspectName transits over angle orb starts ends phases exact crossesLng) =
-  Transit aspectName transits <$> f over 
-                              <*> pure angle 
-                              <*> pure orb 
-                              <*> pure starts 
-                              <*> pure ends 
-                              <*> pure phases 
-                              <*> pure exact 
-                              <*> pure crossesLng
-
--------------------------------------------------------------------------------
 -- Lenses for LunarPhaseInfo
 -------------------------------------------------------------------------------
 
@@ -316,8 +282,8 @@ eventL =
     get = event
     set e evt' = e{event=evt'}
 
-exactitudeL :: Lens' ExactEvent [UTCTime]
-exactitudeL =
+exactitudeMomentsL :: Lens' ExactEvent [UTCTime]
+exactitudeMomentsL =
   simpleLens get set
   where
     get = exactitudeMoments
@@ -327,13 +293,6 @@ exactitudeL =
 -------------------------------------------------------------------------------
 -- Traversals for Event and ancillary types
 -------------------------------------------------------------------------------
-
-_Event :: Traversal' ExactEvent Event
-_Event f (ExactEvent e x) = ExactEvent <$> f e <*> pure x
-
-_Exactitudes :: Traversal' ExactEvent [UTCTime]
-_Exactitudes f (ExactEvent e xs) = ExactEvent e <$> f xs
-
 
 _DirectionChangeInfo :: Traversal' Event PlanetStation
 _DirectionChangeInfo f (DirectionChange info) = DirectionChange <$> f info

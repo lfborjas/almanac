@@ -2,14 +2,17 @@
 
 Utilities for processing pre-calculated Ephemeris data (see [swiss-ephemeris](https://github.com/lfborjas/swiss-ephemeris).) 
 Given an interval and a set of queries, it will efficiently traverse precalculated ephemeris in daily
-increments, or do faster interpolation of ephemeris data for certain queries like moon events and eclipses, and return a [`Seq`](https://hackage.haskell.org/package/containers)
+increments, or do faster interpolation of regular ephemeris data for certain queries like moon events and eclipses, and return a [`Seq`](https://hackage.haskell.org/package/containers)
 of `Events`. One can then choose to inspect the extracted events to calculate when _exactly_
 they happen -- this is recommended as an extra step, only on demand, since exactitude calculation
 needs to do some numerical interpolation, vs. simple fast daily perusal.
 
 Since the main use case is to get a sequence of events and presumably examine them, `Lens`es and `Traversal`s are
 provided in the `Almanac.Optics` module to help in the otherwise tiresome deep pattern matching that could ensue. 
-Note that there's **no dependency** on any actual `lens`-like library, so you'll have to bring your own to actually do "lens stuff" with the provided optics. To illustrate how the provided optics can be brought to life with a lens library, the tests use `microlens`.
+Note that there's **no dependency** on any actual `lens`-like library, so you'll have to bring your own to actually do "lens stuff" with the provided optics. 
+To illustrate how the provided optics can be brought to life with a lens library, the tests use `microlens`. I have only added the most
+obvious lenses and traversals (no `Prism`s, since I don't foresee any "construction" happening and thus `Traversal`s do the job nicely
+and don't need a dependency on `profunctors`.)
 
 
 To use this library, you'll have to [get ahold of ephemeris files](https://github.com/lfborjas/swiss-ephemeris#ephemerides-files); 
@@ -46,9 +49,9 @@ lunarPhasesAndEclipses = do
   -- annoying pattern matching that would ensue.
   let digest = (summarize <$> exactEvents) ^.. traversed . _Just
       summarize evt = 
-        let phaseName = show <$> evt ^? _Event._LunarPhaseInfo.lunarPhaseNameL
-            eclType   = show <$> evt ^? _Event._EclipseInfo._LunarEclipseType
-            exactAt   = evt ^? _Exactitudes._head
+        let phaseName = show <$> evt ^? eventL._LunarPhaseInfo.lunarPhaseNameL
+            eclType   = show <$> evt ^? eventL._EclipseInfo._LunarEclipseType
+            exactAt   = evt ^? exactitudeMomentsL._head
         in liftA2 (,) (phaseName <|> eclType) exactAt
   pure digest  
 
