@@ -180,3 +180,40 @@ defaultHouses = [I, X]
 -- a list of pairs of all planets to those
 defaultCuspTransitPairs :: [(Planet, HouseName)]
 defaultCuspTransitPairs = defaultCuspTransiting defaultHouses
+
+-- major aspects
+sextile, square, trine, opposition, conjunction :: Aspect
+conjunction = Aspect Conjunction 0 5 5
+sextile = Aspect Sextile 60 5 5
+square = Aspect Square 90 5 5
+trine = Aspect Trine 120 5 5
+opposition = Aspect Opposition 180 5 5
+
+-- minor aspects
+semiSextile, semiSquare, quintile, sesquisquare, biQuintile, quincunx :: Aspect
+semiSextile = Aspect SemiSextile 30 3 3
+semiSquare = Aspect SemiSquare 45 3 3
+quintile = Aspect Quintile 72 2 2
+sesquisquare = Aspect Sesquisquare 135 3 3
+biQuintile = Aspect BiQuintile 144 2 2
+quincunx = Aspect Quincunx 150 3 3
+
+-- per: https://en.wikipedia.org/wiki/Astrological_aspect#/media/File:12_astrological_aspects.png
+majorAspects :: [Aspect]
+majorAspects = [conjunction, semiSextile, sextile, square, trine, quincunx, opposition]
+
+defaultAspects :: [Aspect]
+defaultAspects = 
+  [
+    conjunction,
+    semiSextile,
+    semiSquare,
+    sextile,
+    quintile,
+    square,
+    trine,
+    sesquisquare,
+    biQuintile,
+    quincunx,
+    opposition
+  ]

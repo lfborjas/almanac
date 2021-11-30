@@ -4,11 +4,6 @@ module AlmanacSpec (spec) where
 import Test.Hspec
 import Almanac
 import Almanac.Extras
-    ( allCuspPairs,
-      allPairs,
-      defaultPlanets,
-      filteredPairs,
-      hasExactitude )
 import Almanac.Optics
     ( stationTypeL,
       _DirectionChangeInfo,
@@ -194,21 +189,51 @@ spec = beforeAll_ epheWithFallback $ do
                   [
                     QueryHouseIngress [Moon],
                     -- all possible pairs, without a transiting Moon
-                    QueryPlanetaryNatalTransit $ fromList (filteredPairs allPairs (tail defaultPlanets) defaultPlanets),
-                    QueryCuspTransit $ fromList (filteredPairs allCuspPairs (tail defaultPlanets) [I,X]),
-                    QueryLunarNatalTransit $ fromList defaultPlanets,
-                    QueryLunarCuspTransit [I,X]
+                    QueryPlanetaryNatalTransit (fromList majorAspects) (fromList defaultNatalTransitPairs),
+                    QueryCuspTransit (fromList majorAspects) (fromList defaultCuspTransitPairs),
+                    QueryLunarNatalTransit (fromList majorAspects) (fromList defaultPlanets),
+                    QueryLunarCuspTransit (fromList majorAspects) (fromList defaultHouses)
                   ]
             expectedEvents =
               [
                 ("Moon enters house XI (DirectMotion)","2021-11-25T13:44:39.7735825181Z"),
+                ("Sun Quincunx Chiron","2021-11-25T12:42:25.910954475402Z"),
+                ("Mercury SemiSextile Uranus","2021-11-25T23:51:01.098799109458Z"),
+                ("Mercury Quincunx Chiron","2021-11-26T20:08:33.325251638889Z"),
                 ("Venus Conjunction Sun","2021-11-25T11:33:25.524118244647Z"),
+                ("Moon Quincunx Sun","2021-11-26T01:08:47.985133230686Z"),
+                ("Moon Quincunx Moon","2021-11-25T10:29:47.240101397037Z"),
                 ("Moon Opposition Mercury","2021-11-25T03:30:50.045527517795Z"),
                 ("Moon Trine Venus","2021-11-26T17:49:45.178953409194Z"),
                 ("Moon Trine Mars","2021-11-26T13:42:52.33622521162Z"),
                 ("Moon Square Jupiter","2021-11-26T19:20:45.90741097927Z"),
+                ("Moon Quincunx Saturn","2021-11-25T04:29:24.774884283542Z"),
+                ("Moon Quincunx Neptune","2021-11-25T12:00:54.584334790706Z"),
                 ("Moon Square Pluto","2021-11-25T20:53:55.02881526947Z"),
+                ("Moon Quincunx MeanNode","2021-11-25T06:43:07.285946309566Z"),
+                ("Moon SemiSextile MeanApog","2021-11-26T19:24:13.485766053199Z"),
+                ("Moon SemiSextile X","2021-11-25T13:42:39.953512251377Z"),
                 ("Moon Sextile I","2021-11-25T15:09:36.979006826877Z")
+              ] & map (second (pure . mkUTC))
+        exactEvents <- runQuery q >>= eventsWithExactitude
+        let digest = genericEventInfo $ S.filter hasExactitude exactEvents
+        digest `shouldBe` expectedEvents
+        
+      it "finds a specific transit for a longer interval" $ do
+        let weekStart = UTCTime (fromGregorian 2021 11 28) 0
+            weekEnd   = UTCTime (fromGregorian 2021 12 5) 0
+            q = natal
+                  (Interval weekStart weekEnd)
+                  (ReferenceEvent
+                    (mkUTC "1989-01-07T05:30:00Z")
+                    (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ))
+                  [
+                    -- relax the orb for sesquisquare from its very stingy default
+                    QueryPlanetaryNatalTransit [sesquisquare {orbApplying = 3}] [(Mercury, Mars)]
+                  ]
+            expectedEvents =
+              [
+                ("Mercury Sesquisquare Mars","2021-11-29T23:55:56.071771681308Z")
               ] & map (second (pure . mkUTC))
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = genericEventInfo $ S.filter hasExactitude exactEvents

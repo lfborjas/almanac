@@ -4,7 +4,7 @@ Utilities for processing pre-calculated Ephemeris data (see [swiss-ephemeris](ht
 Given an interval and a set of queries, it will efficiently traverse precalculated ephemeris in daily
 increments, or do faster interpolation of regular ephemeris data for certain queries like moon events and eclipses, and return a [`Seq`](https://hackage.haskell.org/package/containers)
 of `Events`. One can then choose to inspect the extracted events to calculate when _exactly_
-they happen -- this is recommended as an extra step, only on demand, since exactitude calculation
+they happen -- this is recommended as an extra step, only on demand, since the exactitude calculation
 needs to do some numerical interpolation, vs. simple fast daily perusal.
 
 Since the main use case is to get a sequence of events and presumably examine them, `Lens`es and `Traversal`s are
@@ -12,7 +12,7 @@ provided in the `Almanac.Optics` module to help in the otherwise tiresome deep p
 Note that there's **no dependency** on any actual `lens`-like library, so you'll have to bring your own to actually do "lens stuff" with the provided optics. 
 To illustrate how the provided optics can be brought to life with a lens library, the tests use `microlens`. I have only added the most
 obvious lenses and traversals (no `Prism`s, since I don't foresee any "construction" happening and thus `Traversal`s do the job nicely
-and don't need a dependency on `profunctors`.)
+and that obviates the need for a dependency on `profunctors`.)
 
 
 To use this library, you'll have to [get ahold of ephemeris files](https://github.com/lfborjas/swiss-ephemeris#ephemerides-files); 
