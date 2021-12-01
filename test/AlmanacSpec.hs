@@ -63,7 +63,6 @@ spec = beforeAll_ epheWithFallback $ do
                 (Direct,"2021-10-18T15:16:50.452575981616Z")
               ] & map (second mkUTC)
         exactEvents <- runQuery q >>= eventsWithExactitude
-        print exactEvents
         let digest = (summarize <$> exactEvents) ^.. traversed . _Just
             summarize evt =
               let stationT  = evt ^? eventL._DirectionChangeInfo.stationTypeL -- .filtered isChange
