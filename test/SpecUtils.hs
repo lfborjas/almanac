@@ -35,10 +35,7 @@ genericEventInfo evts =
             SolarEclipse eclType _ -> Just ("Solar Eclipse (" <> show eclType <> ")", exacts)
             LunarEclipse eclType _ -> Just ("Lunar Eclipse (" <> show eclType <> ")", exacts)
         DirectionChange PlanetStation{stationType, stationPlanet} ->
-          if stationType `elem` ([Direct, Retrograde] :: [Station] ) then
-            Just (show stationPlanet <> " goes " <> show stationType, exacts)
-          else
-            Nothing
+          Just (show stationPlanet <> " goes " <> show stationType, exacts)
         ZodiacIngress (Crossing _s _e Zodiac{signName} planet motion) ->
           Just (show planet <> " enters " <> show signName <> " (" <> show motion <> ")", exacts)
         HouseIngress  (Crossing _s _e House{houseName} planet motion) ->

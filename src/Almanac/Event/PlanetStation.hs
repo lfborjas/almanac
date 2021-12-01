@@ -21,8 +21,6 @@ getRetrogrades chosenPlanets (pos1 :<| pos2 :<| _) =
     case mkStation False (epheDate pos1, p1) (epheDate pos2, p2) of
      Nothing -> mempty
      Just st -> 
-       -- the MeanNode /appears/ direct/retrograde sometimes,
-       -- but that's not astrologically significant.
        if ephePlanet p1 `elem` chosenPlanets then
          Aggregate $ M.fromList [(ephePlanet p1, singleton (DirectionChange st))]
        else
@@ -54,17 +52,14 @@ mkStation includeStationaryMoments (d1, pos1) (d2, pos2)
       stationPlanet = ephePlanet pos1,
       stationType = if epheSpeed pos1 > epheSpeed pos2 then StationaryRetrograde else StationaryDirect
       }
-  | not includeStationaryMoments && isRelativelyStationary pos1 =
-    Just $ PlanetStation {
+  | otherwise = 
+     Just $ PlanetStation {
       stationStarts  = d1,
       stationEnds = d2,
       stationPlanet = ephePlanet pos1,
-      stationType = if epheSpeed pos1 > epheSpeed pos2 then Retrograde else Direct 
+      stationType = if epheSpeed pos1 >= 0 then Direct else Retrograde
       }
-
-  | otherwise =
-  Nothing
-  
+ 
 isRelativelyStationary :: EphemerisPosition Double -> Bool
 isRelativelyStationary EphemerisPosition{ephePlanet, epheSpeed} =
   case ephePlanet of
