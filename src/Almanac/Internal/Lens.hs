@@ -12,16 +12,11 @@ See:
 * [How can I write lenses without depending on lens?](https://github.com/ekmett/lens/wiki/How-can-I-write-lenses-without-depending-on-lens%3F)
 -}
 
--- | from:
--- https://hackage.haskell.org/package/lens-5.1/docs/Control-Lens-Type.html#t:Simple
-type Simple f s a = f s s a a
-
 -- | General lens: can change the type of the container.
 -- from: https://hackage.haskell.org/package/lens-5.1/docs/Control-Lens-Lens.html#t:Lens
 type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
 
 -- | Monomorphic (simple) 'Lens': can't change the type when setting
--- @type Lens' = Simple Lens@
 type Lens' s a = Lens s s a a
 
 -- | General Traversal
@@ -29,7 +24,6 @@ type Lens' s a = Lens s s a a
 type Traversal s t a b = forall f. Applicative f => (a -> f b) -> s -> f t
 
 -- | Monomorphic 'Traversal'
--- @type Traversal' = Simple Traversal@
 type Traversal' s a = Traversal s s a a
 
 -- | Create a 'Lens'' from a getter and setter

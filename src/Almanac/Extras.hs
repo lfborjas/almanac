@@ -2,46 +2,16 @@
 module Almanac.Extras where
 
 import Almanac.Event.Types
-import Control.Category ((>>>))
 import Data.Bifunctor (first, Bifunctor (bimap))
 import Data.Foldable (foldMap')
 import Data.Function
-import Data.Functor ((<&>))
 import qualified Data.Map as M
 import qualified Data.Sequence as Sq
 import Data.Time
-import Almanac.Event (eventsWithExactitude)
 import SwissEphemeris
 import Data.List (tails)
 import Data.Tuple (swap)
 import Control.Applicative (liftA2)
-
--- | Somewhat opinionated event filter:
--- If the event is a transit, only keep it if the transiting body is a slow planet,
--- or the final orb in the interval is very close, or the event has exactitude
--- moments happening.
-filterEvents :: Sq.Seq ExactEvent -> Sq.Seq ExactEvent
-filterEvents = Sq.filter isRelevantEvent
-
--- | Arbitrary test to see if an event is relevant enough to show in
--- a UI, or process further. Note that close orbs are not counted.
-isRelevantEvent :: ExactEvent -> Bool
-isRelevantEvent evt@(ExactEvent (PlanetaryTransit t) _e) =
-  isSlowTransit t || hasExactitude evt
-isRelevantEvent evt@(ExactEvent (HouseTransit t) _e) =
-  isSlowTransit t || hasExactitude evt
-isRelevantEvent e = hasExactitude e
-
--- | Determine if the last orb for a planet in a given
--- interval is close to exactitude; works best for 24 hour
--- intervals.
-isCloseOrb :: Transit a -> Bool
-isCloseOrb Transit{transitOrb} = transitOrb < 3
-
--- | Is the planet transiting one of the slower moving planets?
-isSlowTransit :: Transit a -> Bool
-isSlowTransit Transit{transiting} =
-  transiting `elem` slowPlanets
 
 -- | Did we find at least one moment of exactitude for the given Event?
 hasExactitude :: ExactEvent -> Bool
@@ -57,10 +27,6 @@ indexByDay tz events =
     repeatPerEvent e@(ExactEvent _evt exacts) =
       zip (map (utcToZonedTime tz) exacts) (repeat $ Sq.singleton e)
     getDay (ZonedTime (LocalTime d _tod) _tz) = d
-
--- | Convenience function to go from a sequence of events to a map of indexed events
-indexedByDay :: TimeZone -> Sq.Seq Event -> IO (M.Map Day (Sq.Seq ExactEvent))
-indexedByDay tz evts = eventsWithExactitude evts <&> (filterEvents >>> indexByDay tz)
 
 -- | All distinct pairings of  planets, with the one that's faster
 -- on average as the first of the pair, always.
