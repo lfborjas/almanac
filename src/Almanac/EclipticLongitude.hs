@@ -15,6 +15,7 @@ newtype EclipticLongitude =
   
 instance HasEclipticLongitude EclipticLongitude where
   getEclipticLongitude (EclipticLongitude l) = l
+  setEclipticLongitude _e l' = EclipticLongitude l'
   
 instance Num EclipticLongitude where
   (EclipticLongitude el1) + (EclipticLongitude el2) =
