@@ -16,7 +16,7 @@ import SwissEphemeris.Precalculated
       EphemerisPosition(epheLongitude, epheSpeed, ephePlanet) )
 import Data.Fixed (mod')
 import Control.Monad (guard, join)
-import Data.List (nub)
+import Data.List (nub, sortOn)
 import Control.Applicative (liftA2)
 import Almanac.EclipticLongitude ( EclipticLongitude(..), (<->), toEclipticLongitude )
 import Almanac.Event.Types
@@ -79,6 +79,8 @@ staticPosition :: Maybe (EphemerisPosition Double) -> Maybe (EphemerisPosition D
 staticPosition (Just pos) = Just $ pos{epheSpeed = 0.0}
 staticPosition Nothing = Nothing
 
+sortAspects :: [Aspect] -> [Aspect]
+sortAspects = sortOn angle 
 
 mkTransit
   :: HasEclipticLongitude a
@@ -92,7 +94,8 @@ mkTransit
 mkTransit chosenAspects ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
   = do
     let (before, after, transitedPos) = (epheLongitude p11, epheLongitude p12, getEclipticLongitude p22)
-    (aspectName, angle', orb', meets) <- determineAspect chosenAspects after transitedPos
+    -- sort aspects to ensure they're in a "cycle"
+    (aspectName, angle', orb', meets) <- determineAspect (sortAspects chosenAspects) after transitedPos
     -- TODO(luis) use diffdeg2n:
     -- https://github.com/lfborjas/swiss-ephemeris/blob/7edfb51ed12b301ffb44811c472f864a49cc7f16/csrc/swephlib.c#L3824 
     let (before', after', ref) = normalize (before, after, getEclipticLongitude meets)
