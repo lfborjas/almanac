@@ -201,6 +201,7 @@ data Zodiac = Zodiac
 
 instance HasEclipticLongitude Zodiac where
   getEclipticLongitude (Zodiac _ l _) = l
+  setEclipticLongitude (Zodiac a _ c) l' = Zodiac a l' c  
   
 instance IsEclipticBand Zodiac where
   eclipticStart = signStart
@@ -227,6 +228,7 @@ data House = House
   
 instance HasEclipticLongitude House where
   getEclipticLongitude = houseCusp
+  setEclipticLongitude (House n _c e) c' = House n c' e
   
 instance IsEclipticBand House where
   eclipticStart = houseCusp
