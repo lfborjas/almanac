@@ -18,11 +18,9 @@ import Almanac.Event.Types
 getRetrogrades :: [Planet] -> Seq (Ephemeris Double) -> Grouped Planet Event
 getRetrogrades chosenPlanets (pos1 :<| pos2 :<| _) =
   concatForEach (zip (toList $ ephePositions pos1) (toList $ ephePositions pos2)) $ \(p1, p2) ->
-    case mkStation (epheDate pos1, p1) (epheDate pos2, p2) of
+    case mkStation False (epheDate pos1, p1) (epheDate pos2, p2) of
      Nothing -> mempty
      Just st -> 
-       -- the MeanNode /appears/ direct/retrograde sometimes,
-       -- but that's not astrologically significant.
        if ephePlanet p1 `elem` chosenPlanets then
          Aggregate $ M.fromList [(ephePlanet p1, singleton (DirectionChange st))]
        else
@@ -30,14 +28,16 @@ getRetrogrades chosenPlanets (pos1 :<| pos2 :<| _) =
 
 getRetrogrades _ _ = mempty
 
+-- NOTE(luis) 
+-- we can create a `getStations` that doesn't ignore stationary moments
 
 isStationary :: ViewL PlanetStation -> Bool
 isStationary EmptyL = False
 isStationary (PlanetStation{stationType} :< _) =
   stationType `elem` [StationaryDirect, StationaryRetrograde]
 
-mkStation :: (JulianDayTT, EphemerisPosition Double) -> (JulianDayTT, EphemerisPosition Double) -> Maybe PlanetStation
-mkStation (d1, pos1) (d2, pos2)
+mkStation :: Bool -> (JulianDayTT, EphemerisPosition Double) -> (JulianDayTT, EphemerisPosition Double) -> Maybe PlanetStation
+mkStation includeStationaryMoments (d1, pos1) (d2, pos2)
   | signum (epheSpeed pos1) /= signum (epheSpeed pos2) =
     Just $ PlanetStation {
       stationStarts = d1,
@@ -45,16 +45,21 @@ mkStation (d1, pos1) (d2, pos2)
       stationPlanet = ephePlanet pos1,
       stationType = if epheSpeed pos1 > epheSpeed pos2 then Retrograde else Direct
      }
-  | isRelativelyStationary pos1 =
+  | includeStationaryMoments && isRelativelyStationary pos1 =
     Just $ PlanetStation {
       stationStarts  = d1,
       stationEnds = d2,
       stationPlanet = ephePlanet pos1,
       stationType = if epheSpeed pos1 > epheSpeed pos2 then StationaryRetrograde else StationaryDirect
       }
-  | otherwise =
-  Nothing
-  
+  | otherwise = 
+     Just $ PlanetStation {
+      stationStarts  = d1,
+      stationEnds = d2,
+      stationPlanet = ephePlanet pos1,
+      stationType = if epheSpeed pos1 >= 0 then Direct else Retrograde
+      }
+ 
 isRelativelyStationary :: EphemerisPosition Double -> Bool
 isRelativelyStationary EphemerisPosition{ephePlanet, epheSpeed} =
   case ephePlanet of

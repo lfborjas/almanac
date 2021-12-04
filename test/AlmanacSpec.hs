@@ -17,7 +17,7 @@ import Almanac.Optics
       _ZodiacIngressInfo,
       _LunarPhaseInfo, eventL)
 import Lens.Micro
-    ( (&), (^..), (^?), _Just, _head, filtered, traversed )
+    ( (&), (^..), (^?), _Just, _head, traversed )
 
 import SwissEphemeris
     ( GeographicPosition(GeographicPosition, geoLat, geoLng),
@@ -65,8 +65,7 @@ spec = beforeAll_ epheWithFallback $ do
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = (summarize <$> exactEvents) ^.. traversed . _Just
             summarize evt =
-              let stationT  = evt ^? eventL._DirectionChangeInfo.stationTypeL.filtered isChange
-                  isChange = (`elem` ([Direct, Retrograde] :: [Station]))
+              let stationT  = evt ^? eventL._DirectionChangeInfo.stationTypeL -- .filtered isChange
                   firstExact = evt ^? exactitudeMomentsL._head
               in  (,) <$> stationT <*> firstExact
             
@@ -174,7 +173,7 @@ spec = beforeAll_ epheWithFallback $ do
                 ("Lunar Eclipse (PartialLunarEclipse)","2021-11-19T09:02:55.849740207195Z")
               ] & map (second (pure . mkUTC))
         exactEvents <- runQuery q >>= eventsWithExactitude
-        let digest = genericEventInfo exactEvents
+        let digest = genericEventInfo $ S.filter hasExactitude exactEvents
         digest `shouldBe` expectedEvents
 
     context "Composite natal query" $ do
