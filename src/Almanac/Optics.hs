@@ -16,6 +16,7 @@ import Almanac.Internal.Lens
 import Almanac.Event.Types
 import Data.Time (UTCTime)
 import Almanac.EclipticLongitude
+import qualified Data.Sequence as S
 -------------------------------------------------------------------------------
 -- Lenses for 'PlanetStation'
 -------------------------------------------------------------------------------
@@ -191,6 +192,13 @@ transitPhasesL =
     get = transitPhases
     set t p' = t{transitPhases = p'}
     
+transitProgressL :: Lens' (Transit a) (S.Seq (JulianDayTT, Double))
+transitProgressL =
+  simpleLens get set
+  where
+    get = transitProgress
+    set t p' = t{transitProgress = p'}
+
 transitIsExactL :: Lens' (Transit a) [JulianDayTT]
 transitIsExactL =
   simpleLens get set

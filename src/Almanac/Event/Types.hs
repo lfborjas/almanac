@@ -305,6 +305,7 @@ data Transit over = Transit {
 , transitPhases :: !(MergeSeq TransitPhase)
 , transitIsExact :: ![JulianDayTT]
 , transitCrosses :: !EclipticLongitude
+, transitProgress :: !(S.Seq (JulianDayTT, Double))
 } deriving (Eq, Show)
 
 instance Eq a => Merge (Transit a) where
@@ -318,7 +319,8 @@ instance Eq a => Merge (Transit a) where
           transitEnds = transitEnds y,
           transitAngle = transitAngle y,
           transitOrb = transitOrb y,
-          transitPhases = transitPhases x <> transitPhases y
+          transitPhases = transitPhases x <> transitPhases y,
+          transitProgress = transitProgress x <> transitProgress y
         }
 
 -------------------------------------------------------------------------------

@@ -15,7 +15,9 @@ import Almanac.Optics
       signNameL,
       lunarPhaseNameL,
       _ZodiacIngressInfo,
-      _LunarPhaseInfo, eventL)
+      _LunarPhaseInfo,
+      _PlanetaryTransitInfo,
+      eventL, transitProgressL)
 import Lens.Micro
     ( (&), (^..), (^?), _Just, _head, traversed )
 
@@ -28,10 +30,10 @@ import SwissEphemeris
                      Scorpio, Sagittarius, Aquarius),
       PlanetMotion(DirectMotion, RetrogradeMotion),
       Planet(Moon, Mercury, Mars, Jupiter, Saturn, Chiron, Uranus,
-             Neptune, Pluto) )
+             Neptune, Pluto), JulianDay (getJulianDay) )
 import Data.Time ( fromGregorian, UTCTime(UTCTime) )
 import Data.Foldable (toList)
-import Data.Bifunctor (second)
+import Data.Bifunctor (second, first)
 import Data.List.NonEmpty (fromList)
 import qualified Data.Sequence as S
 import SpecUtils
@@ -188,10 +190,10 @@ spec = beforeAll_ epheWithFallback $ do
                   [
                     QueryHouseIngress [Moon],
                     -- all possible pairs, without a transiting Moon
-                    QueryPlanetaryNatalTransit (fromList majorAspects) (fromList defaultNatalTransitPairs),
-                    QueryCuspTransit (fromList majorAspects) (fromList defaultCuspTransitPairs),
-                    QueryLunarNatalTransit (fromList majorAspects) (fromList defaultPlanets),
-                    QueryLunarCuspTransit (fromList majorAspects) (fromList defaultHouses)
+                    QueryPlanetaryNatalTransit $ easyTransitOptions (fromList majorAspects) (fromList defaultNatalTransitPairs),
+                    QueryCuspTransit $ easyTransitOptions (fromList majorAspects) (fromList defaultCuspTransitPairs),
+                    QueryLunarNatalTransit $ easyTransitOptions (fromList majorAspects) (fromList defaultPlanets),
+                    QueryLunarCuspTransit $ easyTransitOptions (fromList majorAspects) (fromList defaultHouses)
                   ]
             expectedEvents =
               [
@@ -228,7 +230,7 @@ spec = beforeAll_ epheWithFallback $ do
                     (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ))
                   [
                     -- relax the orb for sesquisquare from its very stingy default
-                    QueryPlanetaryNatalTransit [sesquisquare {orbApplying = 3}] [(Mercury, Mars)]
+                    QueryPlanetaryNatalTransit $ easyTransitOptions [sesquisquare {orbApplying = 3}] [(Mercury, Mars)]
                   ]
             expectedEvents =
               [
@@ -237,3 +239,31 @@ spec = beforeAll_ epheWithFallback $ do
         exactEvents <- runQuery q >>= eventsWithExactitude
         let digest = genericEventInfo $ S.filter hasExactitude exactEvents
         digest `shouldBe` expectedEvents
+     
+      it "can calculate progress for a transit" $ do
+        let weekStart = UTCTime (fromGregorian 2021 11 28) 0
+            weekEnd   = UTCTime (fromGregorian 2021 12 5) 0
+            q = natal
+                  (Interval weekStart weekEnd)
+                  (ReferenceEvent
+                    (mkUTC "1989-01-07T05:30:00Z")
+                    (GeographicPosition {geoLat = 14.0839053, geoLng = -87.2750137} ))
+                  [
+                    -- relax the orb for sesquisquare from its very stingy default
+                    QueryPlanetaryNatalTransit $ TransitOptions True [sesquisquare {orbApplying = 3}] [(Mercury, Mars)]
+                  ]
+            expectedProgress = 
+              [
+                (2459547.500800741, 1.5680699886285936),
+                (2459548.500800741, 4.423177072112594e-3),
+                (2459549.500800741, 1.5754443456043816)
+              ] :: [(Double, Double)]
+        exactEvents <- runQuery q >>= eventsWithExactitude
+        let digest = 
+              (summarize <$> exactEvents) ^.. traversed . _Just
+              & mconcat
+              & toList
+              & map (first getJulianDay)
+            summarize evt =
+              evt ^? eventL._PlanetaryTransitInfo.transitProgressL
+        digest `shouldBe` expectedProgress
