@@ -27,50 +27,50 @@ import Almanac.Event.PlanetStation
 
 type EphemerisPoint = (JulianDayTT, EphemerisPosition Double)
 
-getTransits :: [Aspect] -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
-getTransits chosenAspects chosenPairs (day1Ephe :<| day2Ephe :<| _) =
+getTransits :: Bool -> [Aspect] -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
+getTransits includeOrbProgress chosenAspects chosenPairs (day1Ephe :<| day2Ephe :<| _) =
   concatForEach chosenPairs $ \pair@(planet1, planet2) ->
       let planet1Ephe1 = (epheDate day1Ephe,) <$> planetEphe planet1 day1Ephe
           planet1Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet1 day2Ephe
           planet2Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet2 day2Ephe
           planet1Ephes = liftA2 (,) planet1Ephe1 planet1Ephe2
-          transit' = join $ mkTransit chosenAspects ephePlanet <$> planet1Ephes <*> planet2Ephe2
+          transit' = join $ mkTransit includeOrbProgress chosenAspects ephePlanet <$> planet1Ephes <*> planet2Ephe2
       in case transit' of
         Nothing -> mempty
         Just transit -> Aggregate $ M.fromList [(pair, singleton $ PlanetaryTransit transit)]
 
-getTransits _ _ _ = mempty
+getTransits _ _ _ _ = mempty
 
 
-getNatalTransits :: Ephemeris Double -> [Aspect] -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
-getNatalTransits natalEphemeris chosenAspects chosenPairs (day1Ephe :<| day2Ephe :<| _) =
+getNatalTransits :: Ephemeris Double -> Bool -> [Aspect] -> [(Planet, Planet)] -> Seq (Ephemeris Double) -> Grouped (Planet, Planet) Event
+getNatalTransits natalEphemeris includeProgress chosenAspects chosenPairs (day1Ephe :<| day2Ephe :<| _) =
   concatForEach chosenPairs $ \pair@(planet1, planet2) ->
       let planet1Ephe1 = (epheDate day1Ephe,) <$> planetEphe planet1 day1Ephe
           planet1Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet1 day2Ephe
 
           planet2Ephe2 = (epheDate day2Ephe,) <$> staticPosition (planetEphe planet2 natalEphemeris)
           planet1Ephes = liftA2 (,) planet1Ephe1 planet1Ephe2
-          transit' = join $ mkTransit chosenAspects ephePlanet <$> planet1Ephes <*> planet2Ephe2
+          transit' = join $ mkTransit includeProgress chosenAspects ephePlanet <$> planet1Ephes <*> planet2Ephe2
       in case transit' of
         Nothing -> mempty
         Just transit -> Aggregate $ M.fromList [(pair, singleton $ PlanetaryTransit transit)]
 
-getNatalTransits _ _ _ _ = mempty
+getNatalTransits _ _ _ _ _ = mempty
 
-getCuspTransits :: [House] -> [Aspect] -> [Planet] -> Seq (Ephemeris Double) -> Grouped (Planet, House) Event
-getCuspTransits cusps chosenAspects chosenPlanets (day1Ephe :<| day2Ephe :<| _) =
+getCuspTransits :: [House] -> Bool -> [Aspect] -> [Planet] -> Seq (Ephemeris Double) -> Grouped (Planet, House) Event
+getCuspTransits cusps includeProgress chosenAspects chosenPlanets (day1Ephe :<| day2Ephe :<| _) =
   concatForEach (cProduct chosenPlanets cusps )$ \pair@(planet1, cusp) ->
       let planet1Ephe1 = (epheDate day1Ephe,) <$> planetEphe planet1 day1Ephe
           planet1Ephe2 = (epheDate day2Ephe,) <$> planetEphe planet1 day2Ephe
 
           planet2Ephe2 = Just (epheDate day2Ephe,cusp)
           planet1Ephes = liftA2 (,) planet1Ephe1 planet1Ephe2
-          transit' = join $ mkTransit chosenAspects id <$> planet1Ephes <*> planet2Ephe2
+          transit' = join $ mkTransit includeProgress chosenAspects id <$> planet1Ephes <*> planet2Ephe2
       in case transit' of
         Nothing -> mempty
         Just transit -> Aggregate $ M.fromList [(pair, singleton $ HouseTransit transit)]
 
-getCuspTransits _ _ _ _ = mempty
+getCuspTransits _ _ _ _ _ = mempty
 
 cProduct :: [Planet] -> [a] -> [(Planet, a)]
 cProduct ps as = [(p,a) | p <- ps, a <- as]
@@ -84,14 +84,15 @@ sortAspects = sortOn angle
 
 mkTransit
   :: HasEclipticLongitude a
-  => [Aspect] 
+  => Bool
+  -> [Aspect] 
   -> (a -> b)
   -> (EphemerisPoint, EphemerisPoint)
   -- ^ planet 1 at days 1->2
   -> (JulianDayTT, a)
   -- ^ planet 2 at day 2
   -> Maybe (Transit b)
-mkTransit chosenAspects ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
+mkTransit includeProgress chosenAspects ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
   = do
     let (before, after, transitedPos) = (epheLongitude p11, epheLongitude p12, getEclipticLongitude p22)
     -- sort aspects to ensure they're in a "cycle"
@@ -114,7 +115,8 @@ mkTransit chosenAspects ins transiting@((t1, p11), (t2, p12)) (_t22, p22)
         transitEnds = t2,
         transitPhases = phaseInfo,
         transitIsExact = mempty,
-        transitCrosses = meets
+        transitCrosses = meets,
+        transitProgress = if includeProgress then [(t2, orb')] else mempty
       }
 
 
@@ -270,7 +272,8 @@ lunarAspects chosenAspects ins start end pos =
         transitIsExact = [exactCrossingTime],
         transitEnds = estimateEnd exactCrossingTime,
         transitPhases = mempty,
-        transitCrosses = exactCrossingLng
+        transitCrosses = exactCrossingLng,
+        transitProgress = mempty
       }
     -- from:
     -- https://github.com/aloistr/swisseph/blob/40a0baa743a7c654f0ae3331c5d9170ca1da6a6a/sweph.c#L8494
